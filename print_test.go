@@ -2,8 +2,6 @@ package pretty
 
 import (
 	"testing"
-
-	"github.com/domonda/go-types/uu"
 )
 
 func TestSprint(t *testing.T) {
@@ -18,6 +16,8 @@ func TestSprint(t *testing.T) {
 			Map map[string]struct{}
 		}
 	}
+	type UUID [16]byte
+	var nilUUID UUID
 
 	tests := []struct {
 		name  string
@@ -33,7 +33,7 @@ func TestSprint(t *testing.T) {
 		{name: "struct no sub-init", value: Struct{Int: -1, Str: "xxx"}, want: `Struct{Parent{Map:nil},Int:-1,Str:"xxx",Sub:{Map:nil}}`},
 		{name: "struct sub-init", value: Struct{Sub: struct{ Map map[string]struct{} }{Map: map[string]struct{}{"key": {}}}}, want: `Struct{Parent{Map:nil},Int:0,Str:"",Sub:{Map:{"key":{}}}}`},
 		{name: "string slice", value: []string{"", `"quoted"`, "hello\nworld"}, want: `["","\"quoted\"","hello\nworld"]`},
-		{name: "Nil UUID", value: uu.IDNil, want: `[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]`},
+		{name: "Nil UUID", value: nilUUID, want: `[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]`},
 
 		// TODO
 	}
