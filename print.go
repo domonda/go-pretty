@@ -8,6 +8,7 @@
 package pretty
 
 import (
+	"context"
 	"fmt"
 	"go/token"
 	"io"
@@ -18,6 +19,14 @@ import (
 )
 
 var (
+	// MaxStringLength is the maximum length for escaped strings.
+	// Longer strings will be truncated with an ellipsis character at the end.
+	MaxStringLength = 1000
+
+	// MaxErrorLength is the maximum length for escaped errors.
+	// Longer errors will be truncated with an ellipsis character at the end.
+	MaxErrorLength = 10000
+
 	typeOfByte = reflect.TypeOf(byte(0))
 	// typeOfError = reflect.TypeOf((*error)(nil)).Elem()
 	// typeOfSortInterface = reflect.TypeOf((*sort.Interface)(nil)).Elem()
@@ -91,6 +100,15 @@ func fprint(w io.Writer, v reflect.Value) {
 		return
 	}
 
+	if ctx, ok := v.Interface().(context.Context); ok {
+		var inner string
+		if ctx.Err() != nil {
+			inner = "Err:" + Sprint(ctx.Err().Error())
+		}
+		fmt.Fprintf(w, "Context{%s}", inner)
+		return
+	}
+
 	switch t.Kind() {
 	case reflect.Ptr:
 		// Pointers were dereferenced above, so only nil left as possibility
@@ -102,10 +120,10 @@ func fprint(w io.Writer, v reflect.Value) {
 			err, _ = v.Addr().Interface().(error)
 		}
 		if err != nil {
-			fmt.Fprintf(w, "error(%s)", quoteString(err))
+			fmt.Fprintf(w, "error(%s)", quoteString(err, MaxErrorLength))
 			return
 		}
-		fmt.Fprint(w, quoteString(v.Interface()))
+		fmt.Fprint(w, quoteString(v.Interface(), MaxStringLength))
 
 	case reflect.Bool:
 		fmt.Fprint(w, v.Interface())
@@ -141,7 +159,7 @@ func fprint(w io.Writer, v reflect.Value) {
 			return
 		}
 		if t.Elem() == typeOfByte && utf8.Valid(v.Bytes()) {
-			fmt.Fprint(w, quoteString(v.Interface()))
+			fmt.Fprint(w, quoteString(v.Interface(), MaxStringLength))
 			return
 		}
 		w.Write([]byte{'['})
@@ -191,7 +209,7 @@ func fprint(w io.Writer, v reflect.Value) {
 				err, _ = v.Addr().Interface().(error)
 			}
 			if err != nil {
-				fmt.Fprintf(w, "error(%s)", quoteString(err))
+				fmt.Fprintf(w, "error(%s)", quoteString(err, MaxErrorLength))
 				return
 			}
 		}
@@ -234,9 +252,12 @@ func fprint(w io.Writer, v reflect.Value) {
 	}
 }
 
-func quoteString(s interface{}) string {
+func quoteString(s interface{}, maxLen int) string {
 	q := fmt.Sprintf("%q", s)
 	q = q[1 : len(q)-1]
 	q = strings.ReplaceAll(q, `\"`, `"`)
+	if maxLen > 0 && len(q) > maxLen {
+		q = q[:maxLen-1] + "…"
+	}
 	return "'" + q + "'"
 }

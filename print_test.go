@@ -96,8 +96,24 @@ func TestSprint(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := Sprint(tt.value); got != tt.want {
-				t.Errorf("PrettySprint() = %v, want %v", got, tt.want)
+				t.Errorf("Sprint() = %v, want %v", got, tt.want)
 			}
 		})
 	}
+
+	MaxStringLength = 5
+	t.Run("MaxStringLength", func(t *testing.T) {
+		want := `'Hell…'`
+		if got := Sprint("Hello World"); got != want {
+			t.Errorf("Sprint() = %v, want %v", got, want)
+		}
+	})
+
+	MaxErrorLength = 5
+	t.Run("MaxErrorLength", func(t *testing.T) {
+		want := `error('An\n…')`
+		if got := Sprint(errors.New("An\nError")); got != want {
+			t.Errorf("Sprint() = %v, want %v", got, want)
+		}
+	})
 }
