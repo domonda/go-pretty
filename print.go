@@ -5,6 +5,9 @@
 // Strings are escaped to be single line
 // and quoted with single quotes '
 // to prevent escaping double quotes in JSON logs.
+//
+// MaxStringLength, MaxErrorLength, MaxSliceLength
+// can be set to values greater zero to prevent excessive log sizes.
 package pretty
 
 import (
@@ -21,14 +24,17 @@ import (
 var (
 	// MaxStringLength is the maximum length for escaped strings.
 	// Longer strings will be truncated with an ellipsis rune at the end.
+	// A value <= 0 will disable truncating.
 	MaxStringLength = 1000
 
 	// MaxErrorLength is the maximum length for escaped errors.
 	// Longer errors will be truncated with an ellipsis rune at the end.
+	// A value <= 0 will disable truncating.
 	MaxErrorLength = 10000
 
 	// MaxSliceLength is the maximum length for slices.
 	// Longer slices will be truncated with an ellipsis rune as last element.
+	// A value <= 0 will disable truncating.
 	MaxSliceLength = 1000
 
 	typeOfByte = reflect.TypeOf(byte(0))
@@ -171,7 +177,7 @@ func fprint(w io.Writer, v reflect.Value) {
 			if i > 0 {
 				w.Write([]byte{','})
 			}
-			if i >= MaxSliceLength {
+			if MaxSliceLength > 0 && i >= MaxSliceLength {
 				fmt.Fprint(w, "…")
 				break
 			}
