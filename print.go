@@ -1,7 +1,15 @@
+// Package pretty offers print functions
+// that format values of any Go type in a
+// compact single line string
+// suitable for logging and debugging.
+// Strings are escaped to be single line
+// and quoted with single quotes '
+// to prevent escaping double quotes in JSON logs.
 package pretty
 
 import (
 	"fmt"
+	"go/token"
 	"io"
 	"os"
 	"reflect"
@@ -11,9 +19,16 @@ import (
 
 var (
 	typeOfByte = reflect.TypeOf(byte(0))
-
-// typeOfSortInterface = reflect.TypeOf((*sort.Interface)(nil)).Elem()
+	// typeOfError = reflect.TypeOf((*error)(nil)).Elem()
+	// typeOfSortInterface = reflect.TypeOf((*sort.Interface)(nil)).Elem()
 )
+
+// Stringer can be implemented to provide
+// a compact single-line string representation of the implementing object
+type Stringer interface {
+	// PrettyString returns a compact single-line string representation of the implementing object.
+	PrettyString() string
+}
 
 // Println pretty prints a value to os.Stderr followed by a newline
 func Println(value interface{}) {
@@ -58,26 +73,51 @@ func fprint(w io.Writer, v reflect.Value) {
 	}
 	t := v.Type()
 
+	stringer, _ := v.Interface().(Stringer)
+	if stringer == nil && v.CanAddr() {
+		stringer, _ = v.Addr().Interface().(Stringer)
+	}
+	if stringer != nil {
+		fmt.Fprint(w, stringer.PrettyString())
+		return
+	}
+
+	goStringer, _ := v.Interface().(fmt.GoStringer)
+	if goStringer == nil && v.CanAddr() {
+		goStringer, _ = v.Addr().Interface().(fmt.GoStringer)
+	}
+	if goStringer != nil {
+		fmt.Fprint(w, goStringer.GoString())
+		return
+	}
+
 	switch t.Kind() {
 	case reflect.Ptr:
 		// Pointers were dereferenced above, so only nil left as possibility
 		fmt.Fprint(w, "nil")
 
 	case reflect.String:
-		fmt.Fprintf(w, "%q", v.Interface())
+		err, _ := v.Interface().(error)
+		if err == nil && v.CanAddr() {
+			err, _ = v.Addr().Interface().(error)
+		}
+		if err != nil {
+			fmt.Fprintf(w, "error(%s)", quoteString(err))
+			return
+		}
+		fmt.Fprint(w, quoteString(v.Interface()))
 
-	case reflect.Int,
-		reflect.Int8,
-		reflect.Int16,
-		reflect.Int32,
-		reflect.Int64,
-		reflect.Uint,
-		reflect.Uint8,
-		reflect.Uint16,
-		reflect.Uint32,
-		reflect.Uint64,
-		reflect.Uintptr:
+	case reflect.Bool:
 		fmt.Fprint(w, v.Interface())
+
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		fmt.Fprint(w, v.Interface())
+
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		fmt.Fprint(w, v.Interface())
+
+	case reflect.Uintptr:
+		fmt.Fprintf(w, "%#v", v.Interface())
 
 	case reflect.Float32, reflect.Float64:
 		fmt.Fprint(w, v.Interface())
@@ -101,7 +141,7 @@ func fprint(w io.Writer, v reflect.Value) {
 			return
 		}
 		if t.Elem() == typeOfByte && utf8.Valid(v.Bytes()) {
-			fmt.Fprintf(w, "%q", v.Interface())
+			fmt.Fprint(w, quoteString(v.Interface()))
 			return
 		}
 		w.Write([]byte{'['})
@@ -138,12 +178,36 @@ func fprint(w io.Writer, v reflect.Value) {
 		w.Write([]byte{'}'})
 
 	case reflect.Struct:
-		fmt.Fprintf(w, "%s{", t.Name())
+		hasExportedFields := false
 		for i := 0; i < t.NumField(); i++ {
-			if i > 0 {
+			if token.IsExported(t.Field(i).Name) {
+				hasExportedFields = true
+				break
+			}
+		}
+		if !hasExportedFields {
+			err, _ := v.Interface().(error)
+			if err == nil && v.CanAddr() {
+				err, _ = v.Addr().Interface().(error)
+			}
+			if err != nil {
+				fmt.Fprintf(w, "error(%s)", quoteString(err))
+				return
+			}
+		}
+
+		fmt.Fprintf(w, "%s{", t.Name())
+		first := true
+		for i := 0; i < t.NumField(); i++ {
+			f := t.Field(i)
+			if !token.IsExported(f.Name) {
+				continue
+			}
+			if first {
+				first = false
+			} else {
 				w.Write([]byte{','})
 			}
-			f := t.Field(i)
 			if !f.Anonymous {
 				fmt.Fprintf(w, "%s:", f.Name)
 			}
@@ -151,38 +215,28 @@ func fprint(w io.Writer, v reflect.Value) {
 		}
 		w.Write([]byte{'}'})
 
-	case reflect.Chan:
+	case reflect.Chan, reflect.Func, reflect.Interface:
 		if v.IsNil() {
 			fmt.Fprint(w, "nil")
 			return
 		}
-		switch t.ChanDir() {
-		case reflect.RecvDir:
-			fmt.Fprint(w, "<-chan ", t.Elem().String())
-		case reflect.SendDir:
-			fmt.Fprint(w, "chan<- ", t.Elem().String())
-		case reflect.BothDir:
-			fmt.Fprint(w, "chan ", t.Elem().String())
-		}
-
-	case reflect.Func:
-		if v.IsNil() {
-			fmt.Fprint(w, "nil")
-			return
-		}
-		fmt.Fprint(w, "func")
-
-	case reflect.Interface:
-		if v.IsNil() {
-			fmt.Fprint(w, "nil")
-			return
-		}
-		fmt.Fprint(w, "interface{}")
+		fmt.Fprint(w, t.String())
 
 	case reflect.UnsafePointer:
+		if v.IsNil() {
+			fmt.Fprint(w, "nil")
+			return
+		}
 		fmt.Fprint(w, v.Interface())
 
 	default:
-		panic("invalid kind")
+		panic("invalid kind: " + t.Kind().String())
 	}
+}
+
+func quoteString(s interface{}) string {
+	q := fmt.Sprintf("%q", s)
+	q = q[1 : len(q)-1]
+	q = strings.ReplaceAll(q, `\"`, `"`)
+	return "'" + q + "'"
 }
