@@ -110,7 +110,11 @@ func fprint(w io.Writer, v reflect.Value) {
 		return
 	}
 
-	if ctx, ok := v.Interface().(context.Context); ok {
+	ctx, _ := v.Interface().(context.Context)
+	if ctx == nil && v.CanAddr() {
+		ctx, _ = v.Addr().Interface().(context.Context)
+	}
+	if ctx != nil {
 		var inner string
 		if ctx.Err() != nil {
 			inner = "Err:" + Sprint(ctx.Err().Error())
