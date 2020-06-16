@@ -20,12 +20,16 @@ import (
 
 var (
 	// MaxStringLength is the maximum length for escaped strings.
-	// Longer strings will be truncated with an ellipsis character at the end.
+	// Longer strings will be truncated with an ellipsis rune at the end.
 	MaxStringLength = 1000
 
 	// MaxErrorLength is the maximum length for escaped errors.
-	// Longer errors will be truncated with an ellipsis character at the end.
+	// Longer errors will be truncated with an ellipsis rune at the end.
 	MaxErrorLength = 10000
+
+	// MaxSliceLength is the maximum length for slices.
+	// Longer slices will be truncated with an ellipsis rune as last element.
+	MaxSliceLength = 1000
 
 	typeOfByte = reflect.TypeOf(byte(0))
 	// typeOfError = reflect.TypeOf((*error)(nil)).Elem()
@@ -167,6 +171,10 @@ func fprint(w io.Writer, v reflect.Value) {
 			if i > 0 {
 				w.Write([]byte{','})
 			}
+			if i >= MaxSliceLength {
+				fmt.Fprint(w, "…")
+				break
+			}
 			fprint(w, v.Index(i))
 		}
 		w.Write([]byte{']'})
@@ -257,7 +265,7 @@ func quoteString(s interface{}, maxLen int) string {
 	q = q[1 : len(q)-1]
 	q = strings.ReplaceAll(q, `\"`, `"`)
 	if maxLen > 0 && len(q) > maxLen {
-		q = q[:maxLen-1] + "…"
+		q = q[:maxLen] + "…"
 	}
 	return "'" + q + "'"
 }

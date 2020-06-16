@@ -103,7 +103,7 @@ func TestSprint(t *testing.T) {
 
 	MaxStringLength = 5
 	t.Run("MaxStringLength", func(t *testing.T) {
-		want := `'Hell…'`
+		want := `'Hello…'`
 		if got := Sprint("Hello World"); got != want {
 			t.Errorf("Sprint() = %v, want %v", got, want)
 		}
@@ -111,8 +111,16 @@ func TestSprint(t *testing.T) {
 
 	MaxErrorLength = 5
 	t.Run("MaxErrorLength", func(t *testing.T) {
-		want := `error('An\n…')`
+		want := `error('An\nE…')`
 		if got := Sprint(errors.New("An\nError")); got != want {
+			t.Errorf("Sprint() = %v, want %v", got, want)
+		}
+	})
+
+	MaxSliceLength = 5
+	t.Run("MaxErrorLength", func(t *testing.T) {
+		want := `[1,2,3,4,5,…]`
+		if got := Sprint([]int{1, 2, 3, 4, 5, 6, 7}); got != want {
 			t.Errorf("Sprint() = %v, want %v", got, want)
 		}
 	})
