@@ -2,6 +2,8 @@ package pretty
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"testing"
 	"time"
 	"unsafe"
@@ -13,9 +15,11 @@ type ErrorStruct struct {
 	err string
 }
 
-func (e ErrorStruct) Error() string {
-	return e.err
-}
+func (e ErrorStruct) Error() string { return e.err }
+
+type StringXer string
+
+func (s StringXer) PrettyPrint(w io.Writer) { fmt.Fprintf(w, "'%sX'", s) }
 
 func TestSprint(t *testing.T) {
 	type Parent struct {
@@ -44,19 +48,21 @@ func TestSprint(t *testing.T) {
 	}{
 		{name: "nil", value: nil, want: `nil`},
 		{name: "nilError", value: nilError, want: `nil`},
-		{name: "an error", value: errors.New("An\nError"), want: `error('An\nError')`},
+		{name: "an error", value: errors.New("An\nError"), want: `error("An\nError")`},
 		{name: "ErrorStruct", value: ErrorStruct{X: 1, Y: 2, err: "xxx"}, want: `ErrorStruct{X:1,Y:2}`},
 		{name: "ErrorStructPtr", value: &ErrorStruct{X: 1, Y: 2, err: "xxx"}, want: `ErrorStruct{X:1,Y:2}`},
 		{name: "ErrorStruct as error", value: (error)(ErrorStruct{X: 1, Y: 2, err: "xxx"}), want: `ErrorStruct{X:1,Y:2}`},
+		{name: "Printer", value: StringXer("hello"), want: `'helloX'`},
+		{name: "nil Printer", value: (*StringXer)(nil), want: `nil`},
 		{name: "nilPtr", value: (*int)(nil), want: `nil`},
-		{name: "empty string", value: "", want: `''`},
-		{name: "empty bytes string", value: []byte{}, want: `''`},
-		{name: "multiline string", value: "Hello\n\tWorld!\n", want: `'Hello\n\tWorld!\n'`},
-		{name: "bytes string", value: []byte("Hello World"), want: `'Hello World'`},
+		{name: "empty string", value: "", want: "``"},
+		{name: "empty bytes string", value: []byte{}, want: "``"},
+		{name: "multiline string", value: "Hello\n\tWorld!\n", want: `"Hello\n\tWorld!\n"`},
+		{name: "bytes string", value: []byte("Hello World"), want: "`Hello World`"},
 		{name: "int", value: 666, want: `666`},
-		{name: "struct no sub-init", value: Struct{Int: -1, Str: "xxx"}, want: `Struct{Parent{Map:nil},Int:-1,Str:'xxx',Sub:{Map:nil}}`},
-		{name: "struct sub-init", value: Struct{Sub: struct{ Map map[string]struct{} }{Map: map[string]struct{}{"key": {}}}}, want: `Struct{Parent{Map:nil},Int:0,Str:'',Sub:{Map:{'key':{}}}}`},
-		{name: "string slice", value: []string{"", `"quoted"`, "hello\nworld"}, want: `['','"quoted"','hello\nworld']`},
+		{name: "struct no sub-init", value: Struct{Int: -1, Str: "xxx"}, want: "Struct{Parent{Map:nil},Int:-1,Str:`xxx`,Sub:{Map:nil}}"},
+		{name: "struct sub-init", value: Struct{Sub: struct{ Map map[string]struct{} }{Map: map[string]struct{}{"key": {}}}}, want: "Struct{Parent{Map:nil},Int:0,Str:``,Sub:{Map:{`key`:{}}}}"},
+		{name: "string slice", value: []string{"", `"quoted"`, "hello\nworld"}, want: "[``,`\"quoted\"`" + `,"hello\nworld"]`},
 		{name: "Nil UUID", value: nilUUID, want: `[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]`},
 		{name: "true", value: true, want: `true`},
 		{name: "false", value: false, want: `false`},
@@ -85,13 +91,6 @@ func TestSprint(t *testing.T) {
 		{name: "func() (<-chan time.Time, error)", value: func() (<-chan time.Time, error) { panic("") }, want: `func() (<-chan time.Time, error)`},
 		{name: "(func(int) error)(nil)", value: (func(int) error)(nil), want: `nil`},
 		{name: "nil UnsafePointer", value: unsafe.Pointer(nil), want: `nil`},
-		// {name: "Array", value: array(x), want: ``},
-		// {name: "Interface", value: interface(x), want: ``},
-		// {name: "Map", value: map(x), want: ``},
-		// {name: "Ptr", value: ptr(x), want: ``},
-		// {name: "Slice", value: slice(x), want: ``},
-
-		// TODO
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -102,8 +101,29 @@ func TestSprint(t *testing.T) {
 	}
 
 	MaxStringLength = 5
-	t.Run("MaxStringLength", func(t *testing.T) {
-		want := `'Hello…'`
+	t.Run(fmt.Sprintf("MaxStringLength_%d", MaxStringLength), func(t *testing.T) {
+		want := "`Hello…`"
+		if got := Sprint("Hello World"); got != want {
+			t.Errorf("Sprint() = %v, want %v", got, want)
+		}
+	})
+	MaxStringLength = 1
+	t.Run(fmt.Sprintf("MaxStringLength_%d", MaxStringLength), func(t *testing.T) {
+		want := "`H…`"
+		if got := Sprint("Hello World"); got != want {
+			t.Errorf("Sprint() = %v, want %v", got, want)
+		}
+	})
+	MaxStringLength = 0
+	t.Run(fmt.Sprintf("MaxStringLength_%d", MaxStringLength), func(t *testing.T) {
+		want := "`Hello World`"
+		if got := Sprint("Hello World"); got != want {
+			t.Errorf("Sprint() = %v, want %v", got, want)
+		}
+	})
+	MaxStringLength = -1
+	t.Run(fmt.Sprintf("MaxStringLength_%d", MaxStringLength), func(t *testing.T) {
+		want := "`Hello World`"
 		if got := Sprint("Hello World"); got != want {
 			t.Errorf("Sprint() = %v, want %v", got, want)
 		}
@@ -111,7 +131,7 @@ func TestSprint(t *testing.T) {
 
 	MaxErrorLength = 5
 	t.Run("MaxErrorLength", func(t *testing.T) {
-		want := `error('An\nE…')`
+		want := `error("An\nE…")`
 		if got := Sprint(errors.New("An\nError")); got != want {
 			t.Errorf("Sprint() = %v, want %v", got, want)
 		}

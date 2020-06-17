@@ -3,11 +3,15 @@
 // compact single line string
 // suitable for logging and debugging.
 // Strings are escaped to be single line
-// and quoted with single quotes '
-// to prevent escaping double quotes in JSON logs.
+// with fmt.Sprintf("%#q", s).
+// %#q is used instead of %q to minimize
+// the number of double quotes that would
+// have to be escaped in JSON logs.
 //
 // MaxStringLength, MaxErrorLength, MaxSliceLength
 // can be set to values greater zero to prevent excessive log sizes.
+// An ellipsis rune is used as last element to represent
+// the truncated elements.
 package pretty
 
 import (
@@ -42,11 +46,10 @@ var (
 	// typeOfSortInterface = reflect.TypeOf((*sort.Interface)(nil)).Elem()
 )
 
-// Stringer can be implemented to provide
-// a compact single-line string representation of the implementing object
-type Stringer interface {
-	// PrettyString returns a compact single-line string representation of the implementing object.
-	PrettyString() string
+// Printer can be implemented to customize the pretty printing of a type.
+type Printer interface {
+	// PrettyPrint the implementation's data
+	PrettyPrint(io.Writer)
 }
 
 // Println pretty prints a value to os.Stderr followed by a newline
@@ -87,17 +90,17 @@ func fprintValue(w io.Writer, value interface{}) {
 }
 
 func fprint(w io.Writer, v reflect.Value) {
-	for v.Kind() == reflect.Ptr && !v.IsNil() {
-		v = v.Elem()
+	if v.Kind() == reflect.Ptr && v.IsNil() {
+		fmt.Fprint(w, "nil")
+		return
 	}
-	t := v.Type()
 
-	stringer, _ := v.Interface().(Stringer)
-	if stringer == nil && v.CanAddr() {
-		stringer, _ = v.Addr().Interface().(Stringer)
+	printer, _ := v.Interface().(Printer)
+	if printer == nil && v.CanAddr() {
+		printer, _ = v.Addr().Interface().(Printer)
 	}
-	if stringer != nil {
-		fmt.Fprint(w, stringer.PrettyString())
+	if printer != nil {
+		printer.PrettyPrint(w)
 		return
 	}
 
@@ -122,6 +125,11 @@ func fprint(w io.Writer, v reflect.Value) {
 		fmt.Fprintf(w, "Context{%s}", inner)
 		return
 	}
+
+	for v.Kind() == reflect.Ptr && !v.IsNil() {
+		v = v.Elem()
+	}
+	t := v.Type()
 
 	switch t.Kind() {
 	case reflect.Ptr:
@@ -271,11 +279,15 @@ func fprint(w io.Writer, v reflect.Value) {
 }
 
 func quoteString(s interface{}, maxLen int) string {
-	q := fmt.Sprintf("%q", s)
-	q = q[1 : len(q)-1]
-	q = strings.ReplaceAll(q, `\"`, `"`)
-	if maxLen > 0 && len(q) > maxLen {
-		q = q[:maxLen] + "…"
+	q := fmt.Sprintf("%#q", s)
+	if maxLen > 0 && len(q)-2 > maxLen {
+		// Compare byte length as first approximation,
+		// but then count runes to trim at avalid rune byte position
+		for i := range q {
+			if i > maxLen {
+				return q[:i] + "…" + q[len(q)-1:]
+			}
+		}
 	}
-	return "'" + q + "'"
+	return q
 }
