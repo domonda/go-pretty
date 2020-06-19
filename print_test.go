@@ -49,9 +49,9 @@ func TestSprint(t *testing.T) {
 		{name: "nil", value: nil, want: `nil`},
 		{name: "nilError", value: nilError, want: `nil`},
 		{name: "an error", value: errors.New("An\nError"), want: `error("An\nError")`},
-		{name: "ErrorStruct", value: ErrorStruct{X: 1, Y: 2, err: "xxx"}, want: `ErrorStruct{X:1,Y:2}`},
-		{name: "ErrorStructPtr", value: &ErrorStruct{X: 1, Y: 2, err: "xxx"}, want: `ErrorStruct{X:1,Y:2}`},
-		{name: "ErrorStruct as error", value: (error)(ErrorStruct{X: 1, Y: 2, err: "xxx"}), want: `ErrorStruct{X:1,Y:2}`},
+		{name: "ErrorStruct", value: ErrorStruct{X: 1, Y: 2, err: "xxx"}, want: `ErrorStruct{X:1;Y:2}`},
+		{name: "ErrorStructPtr", value: &ErrorStruct{X: 1, Y: 2, err: "xxx"}, want: `ErrorStruct{X:1;Y:2}`},
+		{name: "ErrorStruct as error", value: (error)(ErrorStruct{X: 1, Y: 2, err: "xxx"}), want: `ErrorStruct{X:1;Y:2}`},
 		{name: "Printer", value: StringXer("hello"), want: `'helloX'`},
 		{name: "nil Printer", value: (*StringXer)(nil), want: `nil`},
 		{name: "nilPtr", value: (*int)(nil), want: `nil`},
@@ -60,8 +60,8 @@ func TestSprint(t *testing.T) {
 		{name: "multiline string", value: "Hello\n\tWorld!\n", want: `"Hello\n\tWorld!\n"`},
 		{name: "bytes string", value: []byte("Hello World"), want: "`Hello World`"},
 		{name: "int", value: 666, want: `666`},
-		{name: "struct no sub-init", value: Struct{Int: -1, Str: "xxx"}, want: "Struct{Parent{Map:nil},Int:-1,Str:`xxx`,Sub:{Map:nil}}"},
-		{name: "struct sub-init", value: Struct{Sub: struct{ Map map[string]struct{} }{Map: map[string]struct{}{"key": {}}}}, want: "Struct{Parent{Map:nil},Int:0,Str:``,Sub:{Map:{`key`:{}}}}"},
+		{name: "struct no sub-init", value: Struct{Int: -1, Str: "xxx"}, want: "Struct{Parent{Map:nil};Int:-1;Str:`xxx`;Sub:{Map:nil}}"},
+		{name: "struct sub-init", value: Struct{Sub: struct{ Map map[string]struct{} }{Map: map[string]struct{}{"key": {}}}}, want: "Struct{Parent{Map:nil};Int:0;Str:``;Sub:{Map:{`key`:{}}}}"},
 		{name: "string slice", value: []string{"", `"quoted"`, "hello\nworld"}, want: "[``,`\"quoted\"`" + `,"hello\nworld"]`},
 		{name: "Nil UUID", value: nilUUID, want: `[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]`},
 		{name: "true", value: true, want: `true`},
@@ -144,4 +144,53 @@ func TestSprint(t *testing.T) {
 			t.Errorf("Sprint() = %v, want %v", got, want)
 		}
 	})
+}
+
+func ExamplePrintln() {
+	type Parent struct {
+		Map map[int]string
+	}
+
+	type Struct struct {
+		Parent
+		Int        int
+		unexported bool
+		Str        string
+		Sub        struct {
+			Map map[string]struct{}
+		}
+	}
+
+	value := &Struct{Sub: struct{ Map map[string]struct{} }{Map: map[string]struct{}{"key": {}}}}
+
+	Println(value)
+	Println(value, "  ")
+	Println(value, "  ", "    ")
+
+	// Output:
+	// Struct{Parent{Map:nil};Int:0;Str:``;Sub:{Map:{`key`:{}}}}
+	// Struct{
+	//   Parent{
+	//     Map: nil
+	//   }
+	//   Int: 0
+	//   Str: ``
+	//   Sub: {
+	//     Map: {
+	//       `key`: {}
+	//     }
+	//   }
+	// }
+	//     Struct{
+	//       Parent{
+	//         Map: nil
+	//       }
+	//       Int: 0
+	//       Str: ``
+	//       Sub: {
+	//         Map: {
+	//           `key`: {}
+	//         }
+	//       }
+	//     }
 }
