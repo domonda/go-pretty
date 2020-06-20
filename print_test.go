@@ -57,7 +57,7 @@ func TestSprint(t *testing.T) {
 		{name: "nilPtr", value: (*int)(nil), want: `nil`},
 		{name: "empty string", value: "", want: "``"},
 		{name: "empty bytes string", value: []byte{}, want: "``"},
-		{name: "multiline string", value: "Hello\n\tWorld!\n", want: `"Hello\n\tWorld!\n"`},
+		{name: "multiline string", value: "Hello\n\\World!\"", want: `"Hello\n\\World!\""`},
 		{name: "bytes string", value: []byte("Hello World"), want: "`Hello World`"},
 		{name: "int", value: 666, want: `666`},
 		{name: "struct no sub-init", value: Struct{Int: -1, Str: "xxx"}, want: "Struct{Parent{Map:nil};Int:-1;Str:`xxx`;Sub:{Map:nil}}"},
@@ -157,18 +157,25 @@ func ExamplePrintln() {
 		unexported bool
 		Str        string
 		Sub        struct {
-			Map map[string]struct{}
+			Map map[string]string
 		}
 	}
 
-	value := &Struct{Sub: struct{ Map map[string]struct{} }{Map: map[string]struct{}{"key": {}}}}
+	value := &Struct{
+		Sub: struct{ Map map[string]string }{
+			Map: map[string]string{
+				"key":         "value",
+				"Multi\nLine": "true",
+			},
+		},
+	}
 
 	Println(value)
 	Println(value, "  ")
 	Println(value, "  ", "    ")
 
 	// Output:
-	// Struct{Parent{Map:nil};Int:0;Str:``;Sub:{Map:{`key`:{}}}}
+	// Struct{Parent{Map:nil};Int:0;Str:``;Sub:{Map:{`key`:`value`;"Multi\nLine":`true`}}}
 	// Struct{
 	//   Parent{
 	//     Map: nil
@@ -177,7 +184,8 @@ func ExamplePrintln() {
 	//   Str: ``
 	//   Sub: {
 	//     Map: {
-	//       `key`: {}
+	//       `key`: `value`
+	//       "Multi\nLine": `true`
 	//     }
 	//   }
 	// }
@@ -189,7 +197,8 @@ func ExamplePrintln() {
 	//       Str: ``
 	//       Sub: {
 	//         Map: {
-	//           `key`: {}
+	//           `key`: `value`
+	//           "Multi\nLine": `true`
 	//         }
 	//       }
 	//     }

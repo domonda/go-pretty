@@ -22,7 +22,6 @@ import (
 	"io"
 	"os"
 	"reflect"
-	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -43,9 +42,7 @@ var (
 	// A value <= 0 will disable truncating.
 	MaxSliceLength = 1000
 
-	typeOfByte = reflect.TypeOf(byte(0))
-	// typeOfError = reflect.TypeOf((*error)(nil)).Elem()
-	// typeOfSortInterface = reflect.TypeOf((*sort.Interface)(nil)).Elem()
+	byteType = reflect.TypeOf(byte(0))
 )
 
 // Printer can be implemented to customize the pretty printing of a type.
@@ -103,7 +100,7 @@ func fprintIndent(w io.Writer, value interface{}, indent []string) (endsWithNewL
 	default:
 		var buf bytes.Buffer
 		fprint(&buf, reflect.ValueOf(value))
-		in := Indent(buf.Bytes(), indent[0], strings.Join(indent[1:], ""))
+		in := Indent(buf.Bytes(), indent[0], indent[1:]...)
 		w.Write(in)
 		return len(in) > 0 && in[len(in)-1] == '\n'
 	}
@@ -200,7 +197,7 @@ func fprint(w io.Writer, v reflect.Value) {
 			fmt.Fprint(w, "nil")
 			return
 		}
-		if t.Elem() == typeOfByte && utf8.Valid(v.Bytes()) {
+		if t.Elem() == byteType && utf8.Valid(v.Bytes()) {
 			fmt.Fprint(w, quoteString(v.Interface(), MaxStringLength))
 			return
 		}
@@ -233,7 +230,7 @@ func fprint(w io.Writer, v reflect.Value) {
 		fmt.Fprintf(w, "%s{", t.Name())
 		for i, iter := 0, v.MapRange(); iter.Next(); i++ {
 			if i > 0 {
-				w.Write([]byte{' '})
+				w.Write([]byte{';'})
 			}
 			fprint(w, iter.Key())
 			w.Write([]byte{':'})
@@ -312,93 +309,101 @@ func quoteString(s interface{}, maxLen int) string {
 	return q
 }
 
-func Indent(source []byte, indent, linePrefix string) []byte {
+// Indent pretty printed source using the passed indent string
+// and an optional linePrefix used for every line in case of
+// a multiple line result.
+func Indent(source []byte, indent string, linePrefix ...string) []byte {
 	const (
 		stateDefault = iota
 		stateRawString
 		stateEscString
 	)
 	var (
-		result        = make([]byte, 0, len(source)+256)
-		newLineIndent = "\n" + linePrefix
 		state         = stateDefault
-		current       = 0
-		i             = 0
+		newLineIndent = "\n" + strings.Join(linePrefix, "")
+		result        = make([]byte, 0, len(source)+256)
+		unwritten     = 0
+		i             int
 		r             rune
-		size          int
+		rSize         int
 
-		appendCurrent = func() {
-			next := i + size
-			result = append(result, source[current:next]...)
-			current = next
+		appendUnwritten = func() {
+			next := i + rSize
+			result = append(result, source[unwritten:next]...)
+			unwritten = next
 		}
 	)
-	for ; i < len(source); i += size {
-		r, size = utf8.DecodeRune(source[i:])
+	for i = 0; i < len(source); i += rSize {
+		r, rSize = utf8.DecodeRune(source[i:])
 		if r == utf8.RuneError {
 			break
 		}
 		if i == 0 {
-			result = append(result, linePrefix...)
+			for _, prefix := range linePrefix {
+				result = append(result, prefix...)
+			}
 		}
 		switch state {
 		case stateDefault:
 			switch r {
 			case ':':
-				appendCurrent()
+				appendUnwritten()
 				result = append(result, ' ')
 			case ';':
-				result = append(result, source[current:i]...)
-				current = i + 1
+				result = append(result, source[unwritten:i]...)
+				unwritten = i + 1
 				result = append(result, newLineIndent...)
 			case '{':
-				appendCurrent()
+				appendUnwritten()
 				if i+1 < len(source) && source[i+1] == '}' {
 					// no newLineIndent for {}
 					result = append(result, '}')
-					current++
+					unwritten++
 					i++
 					continue
 				}
 				newLineIndent += indent
 				result = append(result, newLineIndent...)
 			case '}':
-				result = append(result, source[current:i]...)
-				current = i + 1
+				result = append(result, source[unwritten:i]...)
+				unwritten = i + 1
 				newLineIndent = newLineIndent[:len(newLineIndent)-len(indent)]
 				result = append(result, newLineIndent...)
 				result = append(result, '}')
 			case '`':
-				// appendCurrent() // ??
 				state = stateRawString
 			case '"':
-				// appendCurrent() // ??
 				state = stateEscString
 			}
 
 		case stateRawString:
 			if r == '`' {
-				next := i + size
-				result = append(result, source[current:next]...)
-				current = next
+				next := i + rSize
+				result = append(result, source[unwritten:next]...)
+				unwritten = next
 				state = stateDefault
 			}
 
 		case stateEscString:
 			switch r {
 			case '"':
-				next := i + size
-				result = append(result, source[current:next]...)
-				current = next
+				next := i + rSize
+				result = append(result, source[unwritten:next]...)
+				unwritten = next
 				state = stateDefault
 
 			case '\\':
-				tail0 := string(source[i:])
-				_, _, tail1, err := strconv.UnquoteChar(tail0, '"')
-				if err != nil {
-					continue
+				next := i + 1
+				if next < len(source) && (source[next] == '\\' || source[next] == '"') {
+					// Skip next character to prevent interpreting it as string end
+					rSize = 2
 				}
-				size = len(tail0) - len(tail1)
+				// tail0 := string(source[i:])
+				// _, _, tail1, err := strconv.UnquoteChar(tail0, '"')
+				// if err != nil {
+				// 	continue
+				// }
+				// rSize = len(tail0) - len(tail1)
 			}
 		}
 	}
