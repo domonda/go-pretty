@@ -121,15 +121,6 @@ func fprint(w io.Writer, v reflect.Value) {
 		return
 	}
 
-	goStringer, _ := v.Interface().(fmt.GoStringer)
-	if goStringer == nil && v.CanAddr() {
-		goStringer, _ = v.Addr().Interface().(fmt.GoStringer)
-	}
-	if goStringer != nil {
-		fmt.Fprint(w, goStringer.GoString())
-		return
-	}
-
 	ctx, _ := v.Interface().(context.Context)
 	if ctx == nil && v.CanAddr() {
 		ctx, _ = v.Addr().Interface().(context.Context)
