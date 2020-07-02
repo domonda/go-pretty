@@ -45,6 +45,10 @@ var (
 	byteType = reflect.TypeOf(byte(0))
 )
 
+// CircularRef is a replacement token CIRCULAR_REF
+// that will be printed instad of a circular data reference.
+const CircularRef = "CIRCULAR_REF"
+
 // Printer can be implemented to customize the pretty printing of a type.
 type Printer interface {
 	// PrettyPrint the implementation's data
@@ -94,22 +98,38 @@ func fprintIndent(w io.Writer, value interface{}, indent []string) (endsWithNewL
 		return false
 
 	case len(indent) == 0:
-		fprint(w, reflect.ValueOf(value))
+		fprint(w, reflect.ValueOf(value), make(visitedPtrs))
 		return false
 
 	default:
 		var buf bytes.Buffer
-		fprint(&buf, reflect.ValueOf(value))
+		fprint(&buf, reflect.ValueOf(value), make(visitedPtrs))
 		in := Indent(buf.Bytes(), indent[0], indent[1:]...)
 		w.Write(in)
 		return len(in) > 0 && in[len(in)-1] == '\n'
 	}
 }
 
-func fprint(w io.Writer, v reflect.Value) {
-	if v.Kind() == reflect.Ptr && v.IsNil() {
-		fmt.Fprint(w, "nil")
-		return
+type visitedPtrs map[uintptr]struct{}
+
+func (v visitedPtrs) visit(ptr uintptr) (visited bool) {
+	if _, visited = v[ptr]; visited {
+		return true
+	}
+	v[ptr] = struct{}{}
+	return false
+}
+
+func fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
+	if v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			fmt.Fprint(w, "nil")
+			return
+		}
+		if ptrs.visit(v.Pointer()) {
+			fmt.Fprint(w, CircularRef)
+			return
+		}
 	}
 
 	printer, _ := v.Interface().(Printer)
@@ -134,14 +154,17 @@ func fprint(w io.Writer, v reflect.Value) {
 		return
 	}
 
-	for v.Kind() == reflect.Ptr && !v.IsNil() {
+	for (v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface) && !v.IsNil() {
 		v = v.Elem()
 	}
 	t := v.Type()
 
 	switch t.Kind() {
-	case reflect.Ptr:
-		// Pointers were dereferenced above, so only nil left as possibility
+	case reflect.Ptr, reflect.Interface:
+		// Pointers and interfaces were dereferenced above, so only nil left as possibility
+		if !v.IsNil() {
+			panic("expected nil")
+		}
 		fmt.Fprint(w, "nil")
 
 	case reflect.String:
@@ -179,13 +202,17 @@ func fprint(w io.Writer, v reflect.Value) {
 			if i > 0 {
 				w.Write([]byte{','})
 			}
-			fprint(w, v.Index(i))
+			fprint(w, v.Index(i), ptrs)
 		}
 		w.Write([]byte{']'})
 
 	case reflect.Slice:
 		if v.IsNil() {
 			fmt.Fprint(w, "nil")
+			return
+		}
+		if ptrs.visit(v.Pointer()) {
+			fmt.Fprint(w, CircularRef)
 			return
 		}
 		if t.Elem() == byteType && utf8.Valid(v.Bytes()) {
@@ -201,13 +228,17 @@ func fprint(w io.Writer, v reflect.Value) {
 				fmt.Fprint(w, "…")
 				break
 			}
-			fprint(w, v.Index(i))
+			fprint(w, v.Index(i), ptrs)
 		}
 		w.Write([]byte{']'})
 
 	case reflect.Map:
 		if v.IsNil() {
 			fmt.Fprint(w, "nil")
+			return
+		}
+		if ptrs.visit(v.Pointer()) {
+			fmt.Fprint(w, CircularRef)
 			return
 		}
 		// TODO sort map if possible
@@ -223,9 +254,9 @@ func fprint(w io.Writer, v reflect.Value) {
 			if i > 0 {
 				w.Write([]byte{';'})
 			}
-			fprint(w, iter.Key())
+			fprint(w, iter.Key(), ptrs)
 			w.Write([]byte{':'})
-			fprint(w, iter.Value())
+			fprint(w, iter.Value(), ptrs)
 		}
 		w.Write([]byte{'}'})
 
@@ -263,11 +294,11 @@ func fprint(w io.Writer, v reflect.Value) {
 			if !f.Anonymous {
 				fmt.Fprintf(w, "%s:", f.Name)
 			}
-			fprint(w, v.Field(i))
+			fprint(w, v.Field(i), ptrs)
 		}
 		w.Write([]byte{'}'})
 
-	case reflect.Chan, reflect.Func, reflect.Interface:
+	case reflect.Chan, reflect.Func:
 		if v.IsNil() {
 			fmt.Fprint(w, "nil")
 			return

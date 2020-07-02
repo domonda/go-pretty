@@ -146,6 +146,34 @@ func TestSprint(t *testing.T) {
 	})
 }
 
+func TestCircularData(t *testing.T) {
+	type Struct struct {
+		Int int
+		Ref *Struct
+	}
+	circStruct := &Struct{Int: 666}
+	circStruct.Ref = circStruct
+
+	circSlice := make([]interface{}, 1)
+	circSlice[0] = circSlice
+
+	tests := []struct {
+		name  string
+		value interface{}
+		want  string
+	}{
+		{name: "circStruct", value: circStruct, want: `Struct{Int:666;Ref:CIRCULAR_REF}`},
+		{name: "circSlice", value: circSlice, want: `[CIRCULAR_REF]`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Sprint(tt.value); got != tt.want {
+				t.Errorf("Sprint() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func ExamplePrintln() {
 	type Parent struct {
 		Map map[int]string
