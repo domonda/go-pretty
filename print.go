@@ -126,10 +126,12 @@ func fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
 			fmt.Fprint(w, "nil")
 			return
 		}
-		if ptrs.visit(v.Pointer()) {
+		ptr := v.Pointer()
+		if ptrs.visit(ptr) {
 			fmt.Fprint(w, CircularRef)
 			return
 		}
+		defer delete(ptrs, ptr)
 	}
 
 	printer, _ := v.Interface().(Printer)
@@ -211,10 +213,12 @@ func fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
 			fmt.Fprint(w, "nil")
 			return
 		}
-		if ptrs.visit(v.Pointer()) {
+		ptr := v.Pointer()
+		if ptrs.visit(ptr) {
 			fmt.Fprint(w, CircularRef)
 			return
 		}
+		defer delete(ptrs, ptr)
 		if t.Elem() == byteType && utf8.Valid(v.Bytes()) {
 			fmt.Fprint(w, quoteString(v.Interface(), MaxStringLength))
 			return
@@ -237,10 +241,12 @@ func fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
 			fmt.Fprint(w, "nil")
 			return
 		}
-		if ptrs.visit(v.Pointer()) {
+		ptr := v.Pointer()
+		if ptrs.visit(ptr) {
 			fmt.Fprint(w, CircularRef)
 			return
 		}
+		defer delete(ptrs, ptr)
 		// TODO sort map if possible
 		// if t.Key().Implements(typeOfSortInterface) {
 		// 	// TODO Need to make a temp sorted copy

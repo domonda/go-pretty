@@ -154,6 +154,8 @@ func TestCircularData(t *testing.T) {
 	circStruct := &Struct{Int: 666}
 	circStruct.Ref = circStruct
 
+	circStructsNotNested := [...]*Struct{circStruct, circStruct}
+
 	circSlice := make([]interface{}, 1)
 	circSlice[0] = circSlice
 
@@ -162,8 +164,21 @@ func TestCircularData(t *testing.T) {
 		value interface{}
 		want  string
 	}{
-		{name: "circStruct", value: circStruct, want: `Struct{Int:666;Ref:CIRCULAR_REF}`},
-		{name: "circSlice", value: circSlice, want: `[CIRCULAR_REF]`},
+		{
+			name:  "circStruct",
+			value: circStruct,
+			want:  `Struct{Int:666;Ref:CIRCULAR_REF}`,
+		},
+		{
+			name:  "circStructsNotNested",
+			value: circStructsNotNested,
+			want:  `[Struct{Int:666;Ref:CIRCULAR_REF},Struct{Int:666;Ref:CIRCULAR_REF}]`,
+		},
+		{
+			name:  "circSlice",
+			value: circSlice,
+			want:  `[CIRCULAR_REF]`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
