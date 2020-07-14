@@ -189,6 +189,32 @@ func TestCircularData(t *testing.T) {
 	}
 }
 
+func TestSpecialTypes(t *testing.T) {
+	tests := []struct {
+		name  string
+		value interface{}
+		want  string
+	}{
+		{
+			name:  "time.Time",
+			value: time.Date(2020, 07, 14, 12, 9, 34, 0, time.UTC),
+			want:  "Time(`2020-07-14 12:09:34 +0000 UTC`)",
+		},
+		{
+			name:  "time.Duration",
+			value: time.Duration(time.Hour*11 + time.Minute*59 + time.Millisecond*666),
+			want:  "Duration(`11h59m0.666s`)",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Sprint(tt.value); got != tt.want {
+				t.Errorf("Sprint() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func ExamplePrintln() {
 	type Parent struct {
 		Map map[int]string

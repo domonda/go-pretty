@@ -23,10 +23,15 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
-var byteType = reflect.TypeOf(byte(0))
+var (
+	typeOfByte     = reflect.TypeOf(byte(0))
+	typeOfTime     = reflect.TypeOf(time.Time{})
+	typeOfDuration = reflect.TypeOf(time.Duration(0))
+)
 
 // Printer can be implemented to customize the pretty printing of a type.
 type Printer interface {
@@ -140,6 +145,15 @@ func fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
 	}
 	t := v.Type()
 
+	switch t {
+	case typeOfTime:
+		fmt.Fprintf(w, "Time(`%s`)", v.Interface())
+		return
+	case typeOfDuration:
+		fmt.Fprintf(w, "Duration(`%s`)", v.Interface())
+		return
+	}
+
 	switch t.Kind() {
 	case reflect.Ptr, reflect.Interface:
 		// Pointers and interfaces were dereferenced above, so only nil left as possibility
@@ -198,7 +212,7 @@ func fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
 			return
 		}
 		defer delete(ptrs, ptr)
-		if t.Elem() == byteType && utf8.Valid(v.Bytes()) {
+		if t.Elem() == typeOfByte && utf8.Valid(v.Bytes()) {
 			fmt.Fprint(w, quoteString(v.Interface(), MaxStringLength))
 			return
 		}
