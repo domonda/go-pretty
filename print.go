@@ -29,6 +29,7 @@ import (
 
 var (
 	typeOfByte     = reflect.TypeOf(byte(0))
+	typeOfRune     = reflect.TypeOf(rune(0))
 	typeOfTime     = reflect.TypeOf(time.Time{})
 	typeOfDuration = reflect.TypeOf(time.Duration(0))
 )
@@ -212,9 +213,20 @@ func fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
 			return
 		}
 		defer delete(ptrs, ptr)
-		if t.Elem() == typeOfByte && utf8.Valid(v.Bytes()) {
+		switch {
+		case t.Elem() == typeOfByte && utf8.Valid(v.Bytes()):
 			fmt.Fprint(w, quoteString(v.Interface(), MaxStringLength))
 			return
+		case t.Elem() == typeOfRune:
+			runes := v.Interface().([]rune)
+			valid := true
+			for i := 0; valid && i < len(runes); i++ {
+				valid = utf8.ValidRune(runes[i])
+			}
+			if valid {
+				fmt.Fprint(w, quoteString(string(runes), MaxStringLength))
+				return
+			}
 		}
 		w.Write([]byte{'['})
 		for i := 0; i < v.Len(); i++ {
