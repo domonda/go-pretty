@@ -40,6 +40,13 @@ type Printer interface {
 	PrettyPrint(io.Writer)
 }
 
+// Nullable can be implemented to print "null" instead of
+// the representation of the underlying type's value.
+type Nullable interface {
+	// IsNull returns true if the implementing value is considered null.
+	IsNull() bool
+}
+
 // Println pretty prints a value to os.Stdout followed by a newline
 func Println(value interface{}, indent ...string) {
 	endsWithNewLine := fprintIndent(os.Stdout, value, indent)
@@ -125,6 +132,15 @@ func fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
 	}
 	if printer != nil {
 		printer.PrettyPrint(w)
+		return
+	}
+
+	nullable, _ := v.Interface().(Nullable)
+	if nullable == nil && v.CanAddr() {
+		nullable, _ = v.Addr().Interface().(Nullable)
+	}
+	if nullable != nil && nullable.IsNull() {
+		fmt.Fprint(w, "null")
 		return
 	}
 
