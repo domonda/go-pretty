@@ -51,7 +51,7 @@ type Nullable interface {
 func Println(value interface{}, indent ...string) {
 	endsWithNewLine := fprintIndent(os.Stdout, value, indent)
 	if !endsWithNewLine {
-		os.Stdout.Write([]byte{'\n'})
+		os.Stdout.Write([]byte{'\n'}) //#nosec G104
 	}
 }
 
@@ -69,7 +69,7 @@ func Fprint(w io.Writer, value interface{}, indent ...string) {
 func Fprintln(w io.Writer, value interface{}, indent ...string) {
 	endsWithNewLine := fprintIndent(w, value, indent)
 	if !endsWithNewLine {
-		os.Stdout.Write([]byte{'\n'})
+		os.Stdout.Write([]byte{'\n'}) //#nosec G104
 	}
 }
 
@@ -97,7 +97,7 @@ func fprintIndent(w io.Writer, value interface{}, indent []string) (endsWithNewL
 		var buf bytes.Buffer
 		fprint(&buf, reflect.ValueOf(value), make(visitedPtrs))
 		in := Indent(buf.Bytes(), indent[0], indent[1:]...)
-		w.Write(in)
+		w.Write(in) //#nosec G104
 		return len(in) > 0 && in[len(in)-1] == '\n'
 	}
 }
@@ -112,6 +112,7 @@ func (v visitedPtrs) visit(ptr uintptr) (visited bool) {
 	return false
 }
 
+//#nosec G104 -- We don't check for errors writing to w
 func fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
 	if v.Kind() == reflect.Ptr {
 		if v.IsNil() {
