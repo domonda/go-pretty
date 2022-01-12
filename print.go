@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -269,22 +270,16 @@ func fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
 			return
 		}
 		defer delete(ptrs, ptr)
-		// TODO sort map if possible
-		// if t.Key().Implements(typeOfSortInterface) {
-		// 	// TODO Need to make a temp sorted copy
-		// }
-		// switch t.Key().Kind() {
-		// case reflect.String:
-		// case reflect.Slice, reflect.Array:
-		// }
 		fmt.Fprintf(w, "%s{", t.Name())
-		for i, iter := 0, v.MapRange(); iter.Next(); i++ {
+		mapKeys := v.MapKeys()
+		sortReflectValues(mapKeys, t.Key(), ptrs)
+		for i, key := range mapKeys {
 			if i > 0 {
 				w.Write([]byte{';'})
 			}
-			fprint(w, iter.Key(), ptrs)
+			fprint(w, key, ptrs)
 			w.Write([]byte{':'})
-			fprint(w, iter.Value(), ptrs)
+			fprint(w, v.MapIndex(key), ptrs)
 		}
 		w.Write([]byte{'}'})
 
@@ -459,4 +454,54 @@ func Indent(source []byte, indent string, linePrefix ...string) []byte {
 	}
 
 	return result
+}
+
+// sortReflectValues sorts a slice of reflected values.
+// All values must be of the same type passed as valType.
+// The < operator is used if the value's type supports it,
+// else the pretty printed string representations are compared.
+func sortReflectValues(vals []reflect.Value, valType reflect.Type, ptrs visitedPtrs) {
+	if len(vals) < 2 {
+		return
+	}
+	switch valType.Kind() {
+	case reflect.String:
+		sort.Slice(vals, func(i, j int) bool {
+			return vals[i].String() < vals[j].String()
+		})
+		return
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		sort.Slice(vals, func(i, j int) bool {
+			return vals[i].Int() < vals[j].Int()
+		})
+		return
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		sort.Slice(vals, func(i, j int) bool {
+			return vals[i].Uint() < vals[j].Uint()
+		})
+		return
+	case reflect.Float32, reflect.Float64:
+		sort.Slice(vals, func(i, j int) bool {
+			return vals[i].Float() < vals[j].Float()
+		})
+		return
+	case reflect.Bool:
+		sort.Slice(vals, func(i, j int) bool {
+			return vals[i].Bool() == false && vals[j].Bool() == true
+		})
+		return
+	case reflect.Slice:
+		if valType.Elem().Kind() == reflect.Uint8 {
+			sort.Slice(vals, func(i, j int) bool {
+				return bytes.Compare(vals[i].Bytes(), vals[j].Bytes()) < 0
+			})
+			return
+		}
+	}
+	sort.Slice(vals, func(i, j int) bool {
+		var ip, jp strings.Builder
+		fprint(&ip, vals[i], ptrs)
+		fprint(&jp, vals[j], ptrs)
+		return ip.String() < jp.String()
+	})
 }

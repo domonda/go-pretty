@@ -245,7 +245,7 @@ func ExamplePrintln() {
 	Println(value, "  ", "    ")
 
 	// Output:
-	// Struct{Parent{Map:nil};Int:0;Str:``;Sub:{Map:{`key`:`value`;"Multi\nLine":`true`}}}
+	// Struct{Parent{Map:nil};Int:0;Str:``;Sub:{Map:{"Multi\nLine":`true`;`key`:`value`}}}
 	// Struct{
 	//   Parent{
 	//     Map: nil
@@ -254,8 +254,8 @@ func ExamplePrintln() {
 	//   Str: ``
 	//   Sub: {
 	//     Map: {
-	//       `key`: `value`
 	//       "Multi\nLine": `true`
+	//       `key`: `value`
 	//     }
 	//   }
 	// }
@@ -267,8 +267,8 @@ func ExamplePrintln() {
 	//       Str: ``
 	//       Sub: {
 	//         Map: {
-	//           `key`: `value`
 	//           "Multi\nLine": `true`
+	//           `key`: `value`
 	//         }
 	//       }
 	//     }
