@@ -48,7 +48,7 @@ func TestSprint(t *testing.T) {
 	}{
 		{name: "nil", value: nil, want: `nil`},
 		{name: "nilError", value: nilError, want: `nil`},
-		{name: "an error", value: errors.New("An\nError"), want: `error("An\nError")`},
+		{name: "an error", value: errors.New("An\nError"), want: "error(`An\\nError`)"},
 		{name: "ErrorStruct", value: ErrorStruct{X: 1, Y: 2, err: "xxx"}, want: `ErrorStruct{X:1;Y:2}`},
 		{name: "ErrorStructPtr", value: &ErrorStruct{X: 1, Y: 2, err: "xxx"}, want: `ErrorStruct{X:1;Y:2}`},
 		{name: "ErrorStruct as error", value: (error)(ErrorStruct{X: 1, Y: 2, err: "xxx"}), want: `ErrorStruct{X:1;Y:2}`},
@@ -56,13 +56,13 @@ func TestSprint(t *testing.T) {
 		{name: "nil Printer", value: (*StringXer)(nil), want: `nil`},
 		{name: "nilPtr", value: (*int)(nil), want: `nil`},
 		{name: "empty string", value: "", want: "``"},
-		{name: "multiline string", value: "Hello\n\\World!\"", want: `"Hello\n\\World!\""`},
+		{name: "multiline string", value: "Hello\n\"World!\"", want: "`Hello\\n\\\"World!\\\"`"},
 		{name: "byte string", value: []byte("Hello World"), want: "`Hello World`"},
 		{name: "rune string", value: []rune("Hello World"), want: "`Hello World`"},
 		{name: "int", value: 666, want: `666`},
 		{name: "struct no sub-init", value: Struct{Int: -1, Str: "xxx"}, want: "Struct{Parent{Map:nil};Int:-1;Str:`xxx`;Sub:{Map:nil}}"},
 		{name: "struct sub-init", value: Struct{Sub: struct{ Map map[string]struct{} }{Map: map[string]struct{}{"key": {}}}}, want: "Struct{Parent{Map:nil};Int:0;Str:``;Sub:{Map:{`key`:{}}}}"},
-		{name: "string slice", value: []string{"", `"quoted"`, "hello\nworld"}, want: "[``,`\"quoted\"`" + `,"hello\nworld"]`},
+		{name: "string slice", value: []string{"", `"quoted"`, "hello\nworld"}, want: "[``,`\"quoted\"`,`hello\\nworld`]"},
 		{name: "Nil UUID", value: nilUUID, want: `[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]`},
 		{name: "true", value: true, want: `true`},
 		{name: "false", value: false, want: `false`},
@@ -94,8 +94,8 @@ func TestSprint(t *testing.T) {
 		{name: "nil byte slice", value: []byte(nil), want: "nil"},
 		{name: "empty byte slice", value: []byte{}, want: "``"},
 		{name: "1 byte slice", value: make([]byte, 1), want: "[0]"},
-		{name: "MaxSliceLength byte slice", value: make([]byte, MaxSliceLength), want: "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"},
-		{name: "big byte slice", value: make([]byte, MaxSliceLength+1), want: "[]byte(21…)"},
+		{name: "MaxSliceLength byte slice", value: make([]byte, DefaultPrinter.MaxSliceLength), want: "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"},
+		{name: "big byte slice", value: make([]byte, DefaultPrinter.MaxSliceLength+1), want: "[]byte{len(21)}"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -105,44 +105,44 @@ func TestSprint(t *testing.T) {
 		})
 	}
 
-	MaxStringLength = 5
-	t.Run(fmt.Sprintf("MaxStringLength_%d", MaxStringLength), func(t *testing.T) {
+	DefaultPrinter.MaxStringLength = 5
+	t.Run(fmt.Sprintf("MaxStringLength_%d", DefaultPrinter.MaxStringLength), func(t *testing.T) {
 		want := "`Hello…`"
 		if got := Sprint("Hello World"); got != want {
 			t.Errorf("Sprint() = %v, want %v", got, want)
 		}
 	})
-	MaxStringLength = 1
-	t.Run(fmt.Sprintf("MaxStringLength_%d", MaxStringLength), func(t *testing.T) {
+	DefaultPrinter.MaxStringLength = 1
+	t.Run(fmt.Sprintf("MaxStringLength_%d", DefaultPrinter.MaxStringLength), func(t *testing.T) {
 		want := "`H…`"
 		if got := Sprint("Hello World"); got != want {
 			t.Errorf("Sprint() = %v, want %v", got, want)
 		}
 	})
-	MaxStringLength = 0
-	t.Run(fmt.Sprintf("MaxStringLength_%d", MaxStringLength), func(t *testing.T) {
+	DefaultPrinter.MaxStringLength = 0
+	t.Run(fmt.Sprintf("MaxStringLength_%d", DefaultPrinter.MaxStringLength), func(t *testing.T) {
 		want := "`Hello World`"
 		if got := Sprint("Hello World"); got != want {
 			t.Errorf("Sprint() = %v, want %v", got, want)
 		}
 	})
-	MaxStringLength = -1
-	t.Run(fmt.Sprintf("MaxStringLength_%d", MaxStringLength), func(t *testing.T) {
+	DefaultPrinter.MaxStringLength = -1
+	t.Run(fmt.Sprintf("MaxStringLength_%d", DefaultPrinter.MaxStringLength), func(t *testing.T) {
 		want := "`Hello World`"
 		if got := Sprint("Hello World"); got != want {
 			t.Errorf("Sprint() = %v, want %v", got, want)
 		}
 	})
 
-	MaxErrorLength = 5
+	DefaultPrinter.MaxErrorLength = 5
 	t.Run("MaxErrorLength", func(t *testing.T) {
-		want := `error("An\nE…")`
+		want := "error(`An\\nE…`)"
 		if got := Sprint(errors.New("An\nError")); got != want {
 			t.Errorf("Sprint() = %v, want %v", got, want)
 		}
 	})
 
-	MaxSliceLength = 5
+	DefaultPrinter.MaxSliceLength = 5
 	t.Run("MaxErrorLength", func(t *testing.T) {
 		want := `[1,2,3,4,5,…]`
 		if got := Sprint([]int{1, 2, 3, 4, 5, 6, 7}); got != want {
@@ -238,7 +238,10 @@ func ExamplePrintln() {
 	value := &Struct{
 		Sub: struct{ Map map[string]string }{
 			Map: map[string]string{
-				"key":         "value",
+				"key": "value",
+				// Note that the resulting `Multi\nLine` is not a valid Go string.
+				// Double quotes are avoided for better readability of
+				// pretty printed strings in JSON.
 				"Multi\nLine": "true",
 			},
 		},
@@ -249,7 +252,7 @@ func ExamplePrintln() {
 	Println(value, "  ", "    ")
 
 	// Output:
-	// Struct{Parent{Map:nil};Int:0;Str:``;Sub:{Map:{"Multi\nLine":`true`;`key`:`value`}}}
+	// Struct{Parent{Map:nil};Int:0;Str:``;Sub:{Map:{`Multi\nLine`:`true`;`key`:`value`}}}
 	// Struct{
 	//   Parent{
 	//     Map: nil
@@ -258,7 +261,7 @@ func ExamplePrintln() {
 	//   Str: ``
 	//   Sub: {
 	//     Map: {
-	//       "Multi\nLine": `true`
+	//       `Multi\nLine`: `true`
 	//       `key`: `value`
 	//     }
 	//   }
@@ -271,7 +274,7 @@ func ExamplePrintln() {
 	//       Str: ``
 	//       Sub: {
 	//         Map: {
-	//           "Multi\nLine": `true`
+	//           `Multi\nLine`: `true`
 	//           `key`: `value`
 	//         }
 	//       }

@@ -1,24 +1,24 @@
 package pretty
 
-var (
-	// MaxStringLength is the maximum length for escaped strings.
-	// Longer strings will be truncated with an ellipsis rune at the end.
-	// A value <= 0 will disable truncating.
-	MaxStringLength = 200
-
-	// MaxErrorLength is the maximum length for escaped errors.
-	// Longer errors will be truncated with an ellipsis rune at the end.
-	// A value <= 0 will disable truncating.
-	MaxErrorLength = 2000
-
-	// MaxSliceLength is the maximum length for slices.
-	// Longer slices will be truncated with an ellipsis rune as last element.
-	// A value <= 0 will disable truncating.
-	MaxSliceLength = 20
+import (
+	"reflect"
+	"time"
 )
 
-const (
-	// CircularRef is a replacement token CIRCULAR_REF
-	// that will be printed instad of a circular data reference.
-	CircularRef = "CIRCULAR_REF"
+// DefaultPrinter is used by the package level print functions
+var DefaultPrinter = Printer{
+	MaxStringLength: 200,
+	MaxErrorLength:  2000,
+	MaxSliceLength:  20,
+}
+
+// CircularRef is a replacement token CIRCULAR_REF
+// that will be printed instad of a circular data reference.
+const CircularRef = "CIRCULAR_REF"
+
+var (
+	typeOfByte     = reflect.TypeOf(byte(0))
+	typeOfRune     = reflect.TypeOf(rune(0))
+	typeOfTime     = reflect.TypeOf(time.Time{})
+	typeOfDuration = reflect.TypeOf(time.Duration(0))
 )
