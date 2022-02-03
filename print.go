@@ -231,15 +231,26 @@ func fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
 			return
 		}
 		defer delete(ptrs, ptr)
-		switch {
-		case t.Elem() == typeOfByte && utf8.Valid(v.Bytes()):
-			fmt.Fprint(w, quoteString(v.Interface(), MaxStringLength))
-			return
-		case t.Elem() == typeOfRune:
+		switch t.Elem() {
+		case typeOfByte:
+			b := v.Bytes()
+			if bytes.IndexByte(b, 0) == -1 && utf8.Valid(b) {
+				// Bytes are valid UTF-8 without zero, assume it's a string
+				fmt.Fprint(w, quoteString(b, MaxStringLength))
+				return
+			}
+			if len(b) > MaxSliceLength {
+				fmt.Fprintf(w, "[]byte(%d…)", len(b))
+				return
+			}
+		case typeOfRune:
 			runes := v.Interface().([]rune)
 			valid := true
-			for i := 0; valid && i < len(runes); i++ {
-				valid = utf8.ValidRune(runes[i])
+			for _, r := range runes {
+				valid = r > 0 && utf8.ValidRune(r)
+				if !valid {
+					break
+				}
 			}
 			if valid {
 				fmt.Fprint(w, quoteString(string(runes), MaxStringLength))

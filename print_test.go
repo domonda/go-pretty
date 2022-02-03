@@ -56,7 +56,6 @@ func TestSprint(t *testing.T) {
 		{name: "nil Printer", value: (*StringXer)(nil), want: `nil`},
 		{name: "nilPtr", value: (*int)(nil), want: `nil`},
 		{name: "empty string", value: "", want: "``"},
-		{name: "empty byte string", value: []byte{}, want: "``"},
 		{name: "multiline string", value: "Hello\n\\World!\"", want: `"Hello\n\\World!\""`},
 		{name: "byte string", value: []byte("Hello World"), want: "`Hello World`"},
 		{name: "rune string", value: []rune("Hello World"), want: "`Hello World`"},
@@ -92,6 +91,11 @@ func TestSprint(t *testing.T) {
 		{name: "func() (<-chan time.Time, error)", value: func() (<-chan time.Time, error) { panic("") }, want: `func() (<-chan time.Time, error)`},
 		{name: "(func(int) error)(nil)", value: (func(int) error)(nil), want: `nil`},
 		{name: "nil UnsafePointer", value: unsafe.Pointer(nil), want: `nil`},
+		{name: "nil byte slice", value: []byte(nil), want: "nil"},
+		{name: "empty byte slice", value: []byte{}, want: "``"},
+		{name: "1 byte slice", value: make([]byte, 1), want: "[0]"},
+		{name: "MaxSliceLength byte slice", value: make([]byte, MaxSliceLength), want: "[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"},
+		{name: "big byte slice", value: make([]byte, MaxSliceLength+1), want: "[]byte(21…)"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
