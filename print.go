@@ -19,26 +19,26 @@ import (
 )
 
 // Println pretty prints a value to os.Stdout followed by a newline
-func Println(value interface{}, indent ...string) {
+func Println(value any, indent ...string) {
 	DefaultPrinter.Println(value, indent...)
 }
 
 // Print pretty prints a value to os.Stdout
-func Print(value interface{}, indent ...string) {
+func Print(value any, indent ...string) {
 	DefaultPrinter.Print(value, indent...)
 }
 
 // Fprint pretty prints a value to a io.Writer
-func Fprint(w io.Writer, value interface{}, indent ...string) {
+func Fprint(w io.Writer, value any, indent ...string) {
 	DefaultPrinter.Fprint(w, value, indent...)
 }
 
 // Fprint pretty prints a value to a io.Writer followed by a newline
-func Fprintln(w io.Writer, value interface{}, indent ...string) {
+func Fprintln(w io.Writer, value any, indent ...string) {
 	DefaultPrinter.Fprintln(w, value, indent...)
 }
 
 // Sprint pretty prints a value to a string
-func Sprint(value interface{}, indent ...string) string {
+func Sprint(value any, indent ...string) string {
 	return DefaultPrinter.Sprint(value, indent...)
 }
