@@ -45,7 +45,7 @@ type Printer struct {
 }
 
 // Println pretty prints a value to os.Stdout followed by a newline
-func (p *Printer) Println(value interface{}, indent ...string) {
+func (p *Printer) Println(value any, indent ...string) {
 	endsWithNewLine := p.fprintIndent(os.Stdout, value, indent)
 	if !endsWithNewLine {
 		os.Stdout.Write([]byte{'\n'}) //#nosec G104
@@ -53,17 +53,17 @@ func (p *Printer) Println(value interface{}, indent ...string) {
 }
 
 // Print pretty prints a value to os.Stdout
-func (p *Printer) Print(value interface{}, indent ...string) {
+func (p *Printer) Print(value any, indent ...string) {
 	p.fprintIndent(os.Stdout, value, indent)
 }
 
 // Fprint pretty prints a value to a io.Writer
-func (p *Printer) Fprint(w io.Writer, value interface{}, indent ...string) {
+func (p *Printer) Fprint(w io.Writer, value any, indent ...string) {
 	p.fprintIndent(w, value, indent)
 }
 
 // Fprint pretty prints a value to a io.Writer followed by a newline
-func (p *Printer) Fprintln(w io.Writer, value interface{}, indent ...string) {
+func (p *Printer) Fprintln(w io.Writer, value any, indent ...string) {
 	endsWithNewLine := p.fprintIndent(w, value, indent)
 	if !endsWithNewLine {
 		os.Stdout.Write([]byte{'\n'}) //#nosec G104
@@ -71,7 +71,7 @@ func (p *Printer) Fprintln(w io.Writer, value interface{}, indent ...string) {
 }
 
 // Sprint pretty prints a value to a string
-func (p *Printer) Sprint(value interface{}, indent ...string) string {
+func (p *Printer) Sprint(value any, indent ...string) string {
 	var b strings.Builder
 	p.fprintIndent(&b, value, indent)
 	return b.String()
@@ -87,7 +87,7 @@ func (v visitedPtrs) visit(ptr uintptr) (visited bool) {
 	return false
 }
 
-func (p *Printer) fprintIndent(w io.Writer, value interface{}, indent []string) (endsWithNewLine bool) {
+func (p *Printer) fprintIndent(w io.Writer, value any, indent []string) (endsWithNewLine bool) {
 	switch {
 	case value == nil:
 		if len(indent) > 1 {
@@ -397,7 +397,7 @@ func (p *Printer) sortReflectValues(vals []reflect.Value, valType reflect.Type, 
 	})
 }
 
-func quoteString(s interface{}, maxLen int) string {
+func quoteString(s any, maxLen int) string {
 	q := fmt.Sprintf("%#q", s)
 	if maxLen > 0 && len(q)-2 > maxLen {
 		// Compare byte length as first approximation,

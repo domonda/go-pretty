@@ -43,7 +43,7 @@ func TestSprint(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		value interface{}
+		value any
 		want  string
 	}{
 		{name: "nil", value: nil, want: `nil`},
@@ -161,12 +161,12 @@ func TestCircularData(t *testing.T) {
 
 	circStructsNotNested := [...]*Struct{circStruct, circStruct}
 
-	circSlice := make([]interface{}, 1)
+	circSlice := make([]any, 1)
 	circSlice[0] = circSlice
 
 	tests := []struct {
 		name  string
-		value interface{}
+		value any
 		want  string
 	}{
 		{
@@ -197,7 +197,7 @@ func TestCircularData(t *testing.T) {
 func TestSpecialTypes(t *testing.T) {
 	tests := []struct {
 		name  string
-		value interface{}
+		value any
 		want  string
 	}{
 		{
