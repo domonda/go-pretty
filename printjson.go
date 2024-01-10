@@ -13,7 +13,7 @@ import (
 // If no indet argument is given, two spaces will be used
 // to indent JSON lines.
 // A byte slice as input will be marshalled as json.RawMessage.
-func PrintAsJSON(input interface{}, indent ...string) {
+func PrintAsJSON(input any, indent ...string) {
 	var indentStr string
 	if len(indent) == 0 {
 		indentStr = "  "
