@@ -8,6 +8,7 @@ import (
 // Indent pretty printed source using the passed indent string
 // and an optional linePrefix used for every line in case of
 // a multiple line result.
+// Multiple linePrefix values are concatenated into a single string.
 func Indent(source []byte, indent string, linePrefix ...string) []byte {
 	const (
 		stateDefault = iota

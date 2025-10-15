@@ -18,27 +18,47 @@ import (
 	"io"
 )
 
-// Println pretty prints a value to os.Stdout followed by a newline
+// Println pretty prints a value to os.Stdout followed by a newline.
+// The optional indent parameter controls indentation:
+//   - No arguments: prints on a single line without indentation
+//   - One argument: uses indent[0] as indent string for nested structures
+//   - Two+ arguments: uses indent[0] as indent string and indent[1:] concatenated as line prefix
 func Println(value any, indent ...string) {
 	DefaultPrinter.Println(value, indent...)
 }
 
-// Print pretty prints a value to os.Stdout
+// Print pretty prints a value to os.Stdout.
+// The optional indent parameter controls indentation:
+//   - No arguments: prints on a single line without indentation
+//   - One argument: uses indent[0] as indent string for nested structures
+//   - Two+ arguments: uses indent[0] as indent string and indent[1:] concatenated as line prefix
 func Print(value any, indent ...string) {
 	DefaultPrinter.Print(value, indent...)
 }
 
-// Fprint pretty prints a value to a io.Writer
+// Fprint pretty prints a value to a io.Writer.
+// The optional indent parameter controls indentation:
+//   - No arguments: prints on a single line without indentation
+//   - One argument: uses indent[0] as indent string for nested structures
+//   - Two+ arguments: uses indent[0] as indent string and indent[1:] concatenated as line prefix
 func Fprint(w io.Writer, value any, indent ...string) {
 	DefaultPrinter.Fprint(w, value, indent...)
 }
 
-// Fprint pretty prints a value to a io.Writer followed by a newline
+// Fprintln pretty prints a value to a io.Writer followed by a newline.
+// The optional indent parameter controls indentation:
+//   - No arguments: prints on a single line without indentation
+//   - One argument: uses indent[0] as indent string for nested structures
+//   - Two+ arguments: uses indent[0] as indent string and indent[1:] concatenated as line prefix
 func Fprintln(w io.Writer, value any, indent ...string) {
 	DefaultPrinter.Fprintln(w, value, indent...)
 }
 
-// Sprint pretty prints a value to a string
+// Sprint pretty prints a value to a string.
+// The optional indent parameter controls indentation:
+//   - No arguments: prints on a single line without indentation
+//   - One argument: uses indent[0] as indent string for nested structures
+//   - Two+ arguments: uses indent[0] as indent string and indent[1:] concatenated as line prefix
 func Sprint(value any, indent ...string) string {
 	return DefaultPrinter.Sprint(value, indent...)
 }

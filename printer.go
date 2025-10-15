@@ -44,7 +44,11 @@ type Printer struct {
 	MaxSliceLength int
 }
 
-// Println pretty prints a value to os.Stdout followed by a newline
+// Println pretty prints a value to os.Stdout followed by a newline.
+// The optional indent parameter controls indentation:
+//   - No arguments: prints on a single line without indentation
+//   - One argument: uses indent[0] as indent string for nested structures
+//   - Two+ arguments: uses indent[0] as indent string and indent[1:] concatenated as line prefix
 func (p *Printer) Println(value any, indent ...string) {
 	endsWithNewLine := p.fprintIndent(os.Stdout, value, indent)
 	if !endsWithNewLine {
@@ -52,17 +56,29 @@ func (p *Printer) Println(value any, indent ...string) {
 	}
 }
 
-// Print pretty prints a value to os.Stdout
+// Print pretty prints a value to os.Stdout.
+// The optional indent parameter controls indentation:
+//   - No arguments: prints on a single line without indentation
+//   - One argument: uses indent[0] as indent string for nested structures
+//   - Two+ arguments: uses indent[0] as indent string and indent[1:] concatenated as line prefix
 func (p *Printer) Print(value any, indent ...string) {
 	p.fprintIndent(os.Stdout, value, indent)
 }
 
-// Fprint pretty prints a value to a io.Writer
+// Fprint pretty prints a value to a io.Writer.
+// The optional indent parameter controls indentation:
+//   - No arguments: prints on a single line without indentation
+//   - One argument: uses indent[0] as indent string for nested structures
+//   - Two+ arguments: uses indent[0] as indent string and indent[1:] concatenated as line prefix
 func (p *Printer) Fprint(w io.Writer, value any, indent ...string) {
 	p.fprintIndent(w, value, indent)
 }
 
-// Fprint pretty prints a value to a io.Writer followed by a newline
+// Fprintln pretty prints a value to a io.Writer followed by a newline.
+// The optional indent parameter controls indentation:
+//   - No arguments: prints on a single line without indentation
+//   - One argument: uses indent[0] as indent string for nested structures
+//   - Two+ arguments: uses indent[0] as indent string and indent[1:] concatenated as line prefix
 func (p *Printer) Fprintln(w io.Writer, value any, indent ...string) {
 	endsWithNewLine := p.fprintIndent(w, value, indent)
 	if !endsWithNewLine {
@@ -70,7 +86,11 @@ func (p *Printer) Fprintln(w io.Writer, value any, indent ...string) {
 	}
 }
 
-// Sprint pretty prints a value to a string
+// Sprint pretty prints a value to a string.
+// The optional indent parameter controls indentation:
+//   - No arguments: prints on a single line without indentation
+//   - One argument: uses indent[0] as indent string for nested structures
+//   - Two+ arguments: uses indent[0] as indent string and indent[1:] concatenated as line prefix
 func (p *Printer) Sprint(value any, indent ...string) string {
 	var b strings.Builder
 	p.fprintIndent(&b, value, indent)
@@ -87,11 +107,21 @@ func (v visitedPtrs) visit(ptr uintptr) (visited bool) {
 	return false
 }
 
+// fprintIndent pretty prints a value to w with optional indentation.
+// The indent parameter controls indentation behavior:
+//   - Empty slice: prints value without indentation on a single line
+//   - One element: uses indent[0] as indent string for nested structures
+//   - Two+ elements: uses indent[0] as indent string and indent[1:] concatenated as line prefix
+//
+// Returns true if the output ends with a newline character.
+// For nil values with line prefix, prints the prefix before "nil".
+// For non-nil values with indentation, the output is formatted with newlines
+// and proper indentation for readability.
 func (p *Printer) fprintIndent(w io.Writer, value any, indent []string) (endsWithNewLine bool) {
 	switch {
 	case value == nil:
 		if len(indent) > 1 {
-			fmt.Fprint(w, indent[1])
+			fmt.Fprint(w, strings.Join(indent[1:], ""))
 		}
 		fmt.Fprint(w, "nil")
 		return false
