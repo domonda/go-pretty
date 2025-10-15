@@ -66,7 +66,7 @@ func (p *Printer) Fprint(w io.Writer, value any, indent ...string) {
 func (p *Printer) Fprintln(w io.Writer, value any, indent ...string) {
 	endsWithNewLine := p.fprintIndent(w, value, indent)
 	if !endsWithNewLine {
-		os.Stdout.Write([]byte{'\n'}) //#nosec G104
+		w.Write([]byte{'\n'}) //#nosec G104
 	}
 }
 
@@ -109,9 +109,9 @@ func (p *Printer) fprintIndent(w io.Writer, value any, indent []string) (endsWit
 	}
 }
 
-//#nosec G104 -- We don't check for errors writing to w
+// #nosec G104 -- We don't check for errors writing to w
 func (p *Printer) fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		if v.IsNil() {
 			fmt.Fprint(w, "nil")
 			return
@@ -155,7 +155,7 @@ func (p *Printer) fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
 		return
 	}
 
-	for (v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface) && !v.IsNil() {
+	for (v.Kind() == reflect.Pointer || v.Kind() == reflect.Interface) && !v.IsNil() {
 		v = v.Elem()
 	}
 	t := v.Type()
@@ -170,7 +170,7 @@ func (p *Printer) fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
 	}
 
 	switch t.Kind() {
-	case reflect.Ptr, reflect.Interface:
+	case reflect.Pointer, reflect.Interface:
 		// Pointers and interfaces were dereferenced above, so only nil left as possibility
 		if !v.IsNil() {
 			panic("expected nil")
