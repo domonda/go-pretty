@@ -164,6 +164,20 @@ func TestCircularData(t *testing.T) {
 	circSlice := make([]any, 1)
 	circSlice[0] = circSlice
 
+	// Test for indirect circular reference bug with maps
+	// Map A -> Slice B -> Map A (should detect circular reference)
+	circMap := make(map[string]any)
+	indirectSlice := make([]any, 1)
+	circMap["slice"] = indirectSlice
+	indirectSlice[0] = circMap
+
+	// Test for indirect circular reference bug with nested maps
+	// Map A -> Map B -> Map A (should detect circular reference)
+	mapA := make(map[string]any)
+	mapB := make(map[string]any)
+	mapA["b"] = mapB
+	mapB["a"] = mapA
+
 	tests := []struct {
 		name  string
 		value any
@@ -183,6 +197,16 @@ func TestCircularData(t *testing.T) {
 			name:  "circSlice",
 			value: circSlice,
 			want:  `[CIRCULAR_REF]`,
+		},
+		{
+			name:  "circMapViaSlice",
+			value: circMap,
+			want:  `{` + "`slice`" + `:[CIRCULAR_REF]}`,
+		},
+		{
+			name:  "circMapViaMap",
+			value: mapA,
+			want:  `{` + "`b`" + `:{` + "`a`" + `:CIRCULAR_REF}}`,
 		},
 	}
 	for _, tt := range tests {
