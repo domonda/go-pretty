@@ -265,7 +265,7 @@ func (p *Printer) fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
 				fmt.Fprint(w, quoteString(b, p.MaxStringLength))
 				return
 			}
-			if len(b) > p.MaxSliceLength {
+			if p.MaxSliceLength > 0 && len(b) > p.MaxSliceLength {
 				fmt.Fprintf(w, "[]byte{len(%d)}", len(b))
 				return
 			}

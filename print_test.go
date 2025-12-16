@@ -143,7 +143,7 @@ func TestSprint(t *testing.T) {
 	})
 
 	DefaultPrinter.MaxSliceLength = 5
-	t.Run("MaxErrorLength", func(t *testing.T) {
+	t.Run("MaxSliceLength", func(t *testing.T) {
 		want := `[1,2,3,4,5,…]`
 		if got := Sprint([]int{1, 2, 3, 4, 5, 6, 7}); got != want {
 			t.Errorf("Sprint() = %v, want %v", got, want)
