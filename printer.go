@@ -431,7 +431,7 @@ func quoteString(s any, maxLen int) string {
 	q := fmt.Sprintf("%#q", s)
 	if maxLen > 0 && len(q)-2 > maxLen {
 		// Compare byte length as first approximation,
-		// but then count runes to trim at avalid rune byte position
+		// but then count runes to trim at a valid rune byte position
 		for i := range q {
 			if i > maxLen {
 				q = q[:i] + "…" + q[len(q)-1:]
@@ -439,7 +439,7 @@ func quoteString(s any, maxLen int) string {
 			}
 		}
 	}
-	// Replace double qoutes
+	// Replace double quotes
 	if q[0] == '"' && q[len(q)-1] == '"' {
 		q = "`" + q[1:len(q)-1] + "`"
 	}
