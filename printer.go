@@ -42,6 +42,13 @@ type Printer struct {
 	// Longer slices will be truncated with an ellipsis rune as last element.
 	// A value <= 0 will disable truncating.
 	MaxSliceLength int
+
+	// AsPrintable can be used to customize the printing of a
+	// value. If the function returns true, the Printable will be used
+	// to print the value. If the function returns false, the default
+	// pretty printing format will be used.
+	// If not set, the package level AsPrintable function will be used instead.
+	AsPrintable func(v reflect.Value) (p Printable, ok bool)
 }
 
 // Println pretty prints a value to os.Stdout followed by a newline.
@@ -154,11 +161,12 @@ func (p *Printer) fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
 		defer delete(ptrs, ptr)
 	}
 
-	printer, _ := v.Interface().(Printable)
-	if printer == nil && v.CanAddr() {
-		printer, _ = v.Addr().Interface().(Printable)
+	asPrintable := p.AsPrintable
+	if asPrintable == nil {
+		asPrintable = AsPrintable
 	}
-	if printer != nil {
+	printer, ok := asPrintable(v)
+	if ok {
 		printer.PrettyPrint(w)
 		return
 	}
@@ -444,4 +452,14 @@ func quoteString(s any, maxLen int) string {
 		q = "`" + q[1:len(q)-1] + "`"
 	}
 	return q
+}
+
+// AsPrintable returns a Printable and true
+// if the reflect.Value implements the Printable interface.
+func AsPrintable(v reflect.Value) (p Printable, ok bool) {
+	p, ok = v.Interface().(Printable)
+	if !ok && v.CanAddr() {
+		p, ok = v.Addr().Interface().(Printable)
+	}
+	return p, ok
 }

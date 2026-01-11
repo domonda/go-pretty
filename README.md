@@ -114,6 +114,91 @@ func (m MyNullable) IsNull() bool {
 }
 ```
 
+### Advanced: Custom Formatting with AsPrintable
+
+The `Printer.AsPrintable` field allows you to customize how values are printed based on their `reflect.Value`. This is useful when you want to:
+- Add custom formatting for types you don't control
+- Adapt types that implement different interfaces (e.g., `fmt.Stringer`, custom serializers)
+- Change formatting based on runtime conditions
+- Wrap values with additional context
+
+#### Example: Adapting Other Interfaces
+
+You can use `AsPrintable` to enable pretty printing for types that implement other interfaces:
+
+```go
+import (
+    "fmt"
+    "io"
+    "reflect"
+    "github.com/domonda/go-pretty"
+)
+
+// Assume you have types implementing fmt.Stringer or custom interfaces
+type CustomStringer struct {
+    Name string
+}
+
+func (c CustomStringer) String() string {
+    return fmt.Sprintf("Custom<%s>", c.Name)
+}
+
+// Wrapper that adapts any interface to pretty.Printable
+type printableAdapter struct {
+    format func(io.Writer)
+}
+
+func (p printableAdapter) PrettyPrint(w io.Writer) {
+    p.format(w)
+}
+
+// Create a printer that handles fmt.Stringer types
+printer := &pretty.Printer{
+    AsPrintable: func(v reflect.Value) (pretty.Printable, bool) {
+        stringer, ok := v.Interface().(fmt.Stringer)
+        if !ok && v.CanAddr() {
+            stringer, ok = v.Addr().Interface().(fmt.Stringer)
+        }
+        if ok {
+            return printableAdapter{
+                format: func(w io.Writer) {
+                    fmt.Fprint(w, stringer.String())
+                },
+            }, true
+        }
+        return nil, false
+    },
+}
+
+printer.Println(CustomStringer{Name: "test"})
+// Output: Custom<test>
+```
+
+#### Example: Runtime Conditional Formatting
+
+```go
+// Mask sensitive data based on type or field tags
+printer := &pretty.Printer{
+    AsPrintable: func(v reflect.Value) (pretty.Printable, bool) {
+        // Customize based on type name
+        if v.Kind() == reflect.String && v.String() == "a sensitive string" {
+            return printableAdapter{
+                format: func(w io.Writer) {
+                    fmt.Fprint(w, "`***REDACTED***`")
+                },
+            }, true
+        }
+
+        return nil, false
+    },
+}
+
+printer.Println("a sensitive string")
+// Output: `***REDACTED***`
+```
+
+**Note:** If `Printer.AsPrintable` is not set, the package-level `AsPrintable` function is used, which checks if the value implements the `Printable` interface.
+
 ## Output Examples
 
 ```go
