@@ -64,7 +64,9 @@ func Indent(source []byte, indent string, linePrefix ...string) []byte {
 			case '}':
 				result = append(result, source[unwritten:i]...)
 				unwritten = i + 1
-				newLineIndent = newLineIndent[:len(newLineIndent)-len(indent)]
+				if len(newLineIndent) >= len(indent) {
+					newLineIndent = newLineIndent[:len(newLineIndent)-len(indent)]
+				}
 				result = append(result, newLineIndent...)
 				result = append(result, '}')
 			case '`':
@@ -104,6 +106,9 @@ func Indent(source []byte, indent string, linePrefix ...string) []byte {
 			}
 		}
 	}
+
+	// Append any remaining unwritten content
+	result = append(result, source[unwritten:]...)
 
 	return result
 }
