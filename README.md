@@ -199,6 +199,72 @@ printer.Println("a sensitive string")
 
 **Note:** If `Printer.AsPrintable` is not set, the package-level `AsPrintable` function is used, which checks if the value implements the `Printable` interface.
 
+### Global Configuration with DefaultPrinter
+
+The `DefaultPrinter` variable is used by all package-level print functions (`pretty.Sprint`, `pretty.Println`, etc.) and can be configured globally. This is especially useful when you want to customize formatting for third-party packages that use go-pretty (like `go-errs` for error formatting) without implementing the `Printable` interface on your types.
+
+**Use cases:**
+- Hide sensitive data (secrets, passwords, tokens) in error messages and stack traces
+- Customize call stack formatting in error output
+- Mask PII (Personally Identifiable Information) in logs
+- Adapt types that implement other interfaces globally
+
+```go
+import (
+    "fmt"
+    "io"
+    "reflect"
+    "strings"
+    "github.com/domonda/go-pretty"
+)
+
+func init() {
+    // Configure the global DefaultPrinter used by go-errs and other packages
+    pretty.DefaultPrinter.AsPrintable = func(v reflect.Value) (pretty.Printable, bool) {
+        // Mask sensitive strings
+        if v.Kind() == reflect.String {
+            str := v.String()
+            // Check for common secret patterns
+            if strings.Contains(str, "password") ||
+               strings.Contains(str, "token") ||
+               strings.Contains(str, "secret") {
+                return printableAdapter{
+                    format: func(w io.Writer) {
+                        fmt.Fprint(w, "`***REDACTED***`")
+                    },
+                }, true
+            }
+        }
+
+        // Hide sensitive struct fields
+        if v.Kind() == reflect.Struct {
+            t := v.Type()
+            for i := 0; i < t.NumField(); i++ {
+                field := t.Field(i)
+                // Check for "secret" tag
+                if field.Tag.Get("secret") == "true" {
+                    // Return custom formatter that masks this field
+                    // (implementation would format all fields except sensitive ones)
+                }
+            }
+        }
+
+        return nil, false
+    }
+}
+
+// Now all error stack traces from go-errs will automatically mask secrets
+// without needing to implement Printable on your types
+```
+
+This approach allows you to:
+1. **Centrally control** how all values are formatted in your application
+2. **Protect sensitive data** in logs, error traces, and debug output
+3. **Customize third-party package behavior** without modifying their code
+4. **Apply formatting rules** to types you don't control
+
+**Note:** If `Printer.AsPrintable` is not set, the package-level `AsPrintable` function is used, which checks if the value implements the `Printable` interface.
+
 ## Output Examples
 
 ```go
