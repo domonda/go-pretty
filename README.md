@@ -166,7 +166,7 @@ printer := &pretty.Printer{
                 },
             }, true
         }
-        return nil, false
+        return pretty.AsPrintable(v) // Use default
     },
 }
 
@@ -188,8 +188,7 @@ printer := &pretty.Printer{
                 },
             }, true
         }
-
-        return nil, false
+        return pretty.AsPrintable(v) // Use default
     },
 }
 
@@ -199,9 +198,9 @@ printer.Println("a sensitive string")
 
 **Note:** If `Printer.AsPrintable` is not set, the package-level `AsPrintable` function is used, which checks if the value implements the `Printable` interface.
 
-### Global Configuration with DefaultPrinter
+### Integration with go-errs
 
-The `DefaultPrinter` variable is used by all package-level print functions (`pretty.Sprint`, `pretty.Println`, etc.) and can be configured globally. This is especially useful when you want to customize formatting for third-party packages that use go-pretty (like `go-errs` for error formatting) without implementing the `Printable` interface on your types.
+The `go-errs` package uses a configurable `Printer` variable (of type `*pretty.Printer`) for formatting function parameters in error call stacks. You can customize this printer to mask secrets, adapt types, or change formatting without implementing the `Printable` interface on your types.
 
 **Use cases:**
 - Hide sensitive data (secrets, passwords, tokens) in error messages and stack traces
@@ -215,12 +214,22 @@ import (
     "io"
     "reflect"
     "strings"
+    "github.com/domonda/go-errs"
     "github.com/domonda/go-pretty"
 )
 
+// Wrapper that adapts any interface to pretty.Printable
+type printableAdapter struct {
+    format func(io.Writer)
+}
+
+func (p printableAdapter) PrettyPrint(w io.Writer) {
+    p.format(w)
+}
+
 func init() {
-    // Configure the global DefaultPrinter used by go-errs and other packages
-    pretty.DefaultPrinter.AsPrintable = func(v reflect.Value) (pretty.Printable, bool) {
+    // Configure the Printer used by go-errs for error call stacks
+    errs.Printer.AsPrintable = func(v reflect.Value) (pretty.Printable, bool) {
         // Mask sensitive strings
         if v.Kind() == reflect.String {
             str := v.String()
@@ -249,7 +258,7 @@ func init() {
             }
         }
 
-        return nil, false
+        return pretty.AsPrintable(v) // Use default
     }
 }
 
@@ -258,12 +267,12 @@ func init() {
 ```
 
 This approach allows you to:
-1. **Centrally control** how all values are formatted in your application
+1. **Centrally control** how all values are formatted in error call stacks
 2. **Protect sensitive data** in logs, error traces, and debug output
-3. **Customize third-party package behavior** without modifying their code
+3. **Customize error formatting** without modifying go-errs code
 4. **Apply formatting rules** to types you don't control
 
-**Note:** If `Printer.AsPrintable` is not set, the package-level `AsPrintable` function is used, which checks if the value implements the `Printable` interface.
+**Note:** The `errs.Printer` variable is a `*pretty.Printer` that can be fully configured with custom settings like `MaxStringLength`, `MaxErrorLength`, `MaxSliceLength`, and `AsPrintable`.
 
 ## Output Examples
 
