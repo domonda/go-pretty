@@ -114,9 +114,9 @@ func (m MyNullable) IsNull() bool {
 }
 ```
 
-### Advanced: Custom Formatting with AsPrintable
+### Advanced: Custom Formatting with PrintFuncFor
 
-The `Printer.AsPrintable` field allows you to customize how values are printed based on their `reflect.Value`. This is useful when you want to:
+The `Printer.PrintFuncFor` field allows you to customize how values are printed based on their `reflect.Value`. This is useful when you want to:
 - Add custom formatting for types you don't control
 - Adapt types that implement different interfaces (e.g., `fmt.Stringer`, custom serializers)
 - Change formatting based on runtime conditions
@@ -124,7 +124,7 @@ The `Printer.AsPrintable` field allows you to customize how values are printed b
 
 #### Example: Adapting Other Interfaces
 
-You can use `AsPrintable` to enable pretty printing for types that implement other interfaces:
+You can use `PrintFuncFor` to enable pretty printing for types that implement other interfaces:
 
 ```go
 import (
@@ -143,32 +143,19 @@ func (c CustomStringer) String() string {
     return fmt.Sprintf("Custom<%s>", c.Name)
 }
 
-// Wrapper that adapts any interface to pretty.Printable
-type printableAdapter struct {
-    format func(io.Writer)
-}
-
-func (p printableAdapter) PrettyPrint(w io.Writer) {
-    p.format(w)
-}
-
 // Create a printer that handles fmt.Stringer types
-printer := &pretty.Printer{
-    AsPrintable: func(v reflect.Value) (pretty.Printable, bool) {
-        stringer, ok := v.Interface().(fmt.Stringer)
-        if !ok && v.CanAddr() {
-            stringer, ok = v.Addr().Interface().(fmt.Stringer)
+printer := pretty.DefaultPrinter.WithPrintFuncFor(func(v reflect.Value) pretty.PrintFunc {
+    stringer, ok := v.Interface().(fmt.Stringer)
+    if !ok && v.CanAddr() {
+        stringer, ok = v.Addr().Interface().(fmt.Stringer)
+    }
+    if ok {
+        return func(w io.Writer) {
+            fmt.Fprint(w, stringer.String())
         }
-        if ok {
-            return printableAdapter{
-                format: func(w io.Writer) {
-                    fmt.Fprint(w, stringer.String())
-                },
-            }, true
-        }
-        return pretty.AsPrintable(v) // Use default
-    },
-}
+    }
+    return pretty.PrintFuncForPrintable(v) // Use default
+})
 
 printer.Println(CustomStringer{Name: "test"})
 // Output: Custom<test>
@@ -178,25 +165,21 @@ printer.Println(CustomStringer{Name: "test"})
 
 ```go
 // Mask sensitive data based on type or field tags
-printer := &pretty.Printer{
-    AsPrintable: func(v reflect.Value) (pretty.Printable, bool) {
-        // Customize based on type name
-        if v.Kind() == reflect.String && v.String() == "a sensitive string" {
-            return printableAdapter{
-                format: func(w io.Writer) {
-                    fmt.Fprint(w, "`***REDACTED***`")
-                },
-            }, true
+printer := pretty.DefaultPrinter.WithPrintFuncFor(func(v reflect.Value) pretty.PrintFunc {
+    // Customize based on type name
+    if v.Kind() == reflect.String && v.String() == "a sensitive string" {
+        return func(w io.Writer) {
+            fmt.Fprint(w, "`***REDACTED***`")
         }
-        return pretty.AsPrintable(v) // Use default
-    },
-}
+    }
+    return pretty.PrintFuncForPrintable(v) // Use default
+})
 
 printer.Println("a sensitive string")
 // Output: `***REDACTED***`
 ```
 
-**Note:** If `Printer.AsPrintable` is not set, the package-level `AsPrintable` function is used, which checks if the value implements the `Printable` interface.
+**Note:** If `Printer.PrintFuncFor` is not set, the `PrintFuncForPrintable` function is used, which checks if the value implements the `Printable` interface.
 
 ### Integration with go-errs
 
@@ -218,18 +201,9 @@ import (
     "github.com/domonda/go-pretty"
 )
 
-// Wrapper that adapts any interface to pretty.Printable
-type printableAdapter struct {
-    format func(io.Writer)
-}
-
-func (p printableAdapter) PrettyPrint(w io.Writer) {
-    p.format(w)
-}
-
 func init() {
     // Configure the Printer used by go-errs for error call stacks
-    errs.Printer.AsPrintable = func(v reflect.Value) (pretty.Printable, bool) {
+    errs.Printer.PrintFuncFor = func(v reflect.Value) pretty.PrintFunc {
         // Mask sensitive strings
         if v.Kind() == reflect.String {
             str := v.String()
@@ -237,11 +211,9 @@ func init() {
             if strings.Contains(str, "password") ||
                strings.Contains(str, "token") ||
                strings.Contains(str, "secret") {
-                return printableAdapter{
-                    format: func(w io.Writer) {
-                        fmt.Fprint(w, "`***REDACTED***`")
-                    },
-                }, true
+                return func(w io.Writer) {
+                    fmt.Fprint(w, "`***REDACTED***`")
+                }
             }
         }
 
@@ -258,7 +230,7 @@ func init() {
             }
         }
 
-        return pretty.AsPrintable(v) // Use default
+        return pretty.PrintFuncForPrintable(v) // Use default
     }
 }
 
@@ -272,7 +244,7 @@ This approach allows you to:
 3. **Customize error formatting** without modifying go-errs code
 4. **Apply formatting rules** to types you don't control
 
-**Note:** The `errs.Printer` variable is a `*pretty.Printer` that can be fully configured with custom settings like `MaxStringLength`, `MaxErrorLength`, `MaxSliceLength`, and `AsPrintable`.
+**Note:** The `errs.Printer` variable is a `*pretty.Printer` that can be fully configured with custom settings like `MaxStringLength`, `MaxErrorLength`, `MaxSliceLength`, and `PrintFuncFor`.
 
 ## Output Examples
 
@@ -321,6 +293,7 @@ var DefaultPrinter = Printer{
     MaxStringLength: 200,
     MaxErrorLength:  2000,
     MaxSliceLength:  20,
+    PrintFuncFor:    nil,
 }
 ```
 

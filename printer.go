@@ -13,12 +13,6 @@ import (
 	"unicode/utf8"
 )
 
-// Printable can be implemented to customize the pretty printing of a type.
-type Printable interface {
-	// PrettyPrint the implementation's data
-	PrettyPrint(io.Writer)
-}
-
 // Nullable can be implemented to print "null" instead of
 // the representation of the underlying type's value.
 type Nullable interface {
@@ -43,12 +37,41 @@ type Printer struct {
 	// A value <= 0 will disable truncating.
 	MaxSliceLength int
 
-	// AsPrintable can be used to customize the printing of a
-	// value. If the function returns true, the Printable will be used
-	// to print the value. If the function returns false, the default
-	// pretty printing format will be used.
-	// If not set, the package level AsPrintable function will be used instead.
-	AsPrintable func(v reflect.Value) (p Printable, ok bool)
+	// PrintFuncFor can be used to customize the printing of a value
+	// by returning a PrintFunc for a reflect.Value.
+	// Returning nil from the function will disable custom printing
+	// for the value including checking for and using the Printable interface.
+	// If set this function will be used instead of PrintFuncForPrintable,
+	// so call PrintFuncForPrintable within a PrintFuncFor function to check for
+	// and use the Printable interface.
+	// If not set, the PrintFuncForPrintable function will be used instead.
+	//
+	// Example: Adapting fmt.Stringer types
+	//
+	//	printer := pretty.DefaultPrinter.WithPrintFuncFor(func(v reflect.Value) pretty.PrintFunc {
+	//	    stringer, ok := v.Interface().(fmt.Stringer)
+	//	    if !ok && v.CanAddr() {
+	//	        stringer, ok = v.Addr().Interface().(fmt.Stringer)
+	//	    }
+	//	    if ok {
+	//	        return func(w io.Writer) {
+	//	            fmt.Fprint(w, stringer.String())
+	//	        }
+	//	    }
+	//	    return pretty.PrintFuncForPrintable(v) // Use default
+	//	})
+	PrintFuncFor func(reflect.Value) PrintFunc
+}
+
+// WithPrintFuncFor returns a new Printer with the passed PrintFuncFor
+// function set, leaving all other fields unchanged.
+func (p *Printer) WithPrintFuncFor(printFuncFor func(reflect.Value) PrintFunc) *Printer {
+	return &Printer{
+		MaxStringLength: p.MaxStringLength,
+		MaxErrorLength:  p.MaxErrorLength,
+		MaxSliceLength:  p.MaxSliceLength,
+		PrintFuncFor:    printFuncFor,
+	}
 }
 
 // Println pretty prints a value to os.Stdout followed by a newline.
@@ -161,13 +184,12 @@ func (p *Printer) fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
 		defer delete(ptrs, ptr)
 	}
 
-	asPrintable := p.AsPrintable
-	if asPrintable == nil {
-		asPrintable = AsPrintable
+	printFuncFor := p.PrintFuncFor
+	if printFuncFor == nil {
+		printFuncFor = PrintFuncForPrintable
 	}
-	printer, ok := asPrintable(v)
-	if ok {
-		printer.PrettyPrint(w)
+	if printFunc := printFuncFor(v); printFunc != nil {
+		printFunc(w)
 		return
 	}
 
@@ -452,14 +474,4 @@ func quoteString(s any, maxLen int) string {
 		q = "`" + q[1:len(q)-1] + "`"
 	}
 	return q
-}
-
-// AsPrintable returns a Printable and true
-// if the reflect.Value implements the Printable interface.
-func AsPrintable(v reflect.Value) (p Printable, ok bool) {
-	p, ok = v.Interface().(Printable)
-	if !ok && v.CanAddr() {
-		p, ok = v.Addr().Interface().(Printable)
-	}
-	return p, ok
 }
