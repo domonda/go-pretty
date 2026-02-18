@@ -79,25 +79,80 @@ s := printer.Sprint(myValue)
 ### JSON Output
 
 ```go
-// Print as indented JSON
-pretty.PrintAsJSON(myStruct)
+// Print with fmt.Println as indented JSON
+pretty.PrintlnAsJSON(myStruct)
 
-// Custom indent
+// Custom indent print with fmt.Print
 pretty.PrintAsJSON(myStruct, "    ")
 ```
 
 ### Custom Type Formatting
 
-Implement the `Printable` interface for custom formatting:
+Three interfaces are available for customizing how a type is pretty printed.
+They are checked in order of priority: `PrintableWithResult` > `Printable` > `Stringer`.
+Both value and pointer receivers are supported.
+
+#### Printable
+
+The simplest interface — write your representation to the writer:
 
 ```go
-type MyType struct {
-    field string
+type Color struct {
+    R, G, B uint8
 }
 
-func (m MyType) PrettyPrint(w io.Writer) {
-    fmt.Fprintf(w, "MyType{%s}", m.field)
+func (c Color) PrettyPrint(w io.Writer) {
+    _, _ = fmt.Fprintf(w, "#%02x%02x%02x", c.R, c.G, c.B)
 }
+```
+
+```go
+pretty.Sprint(Color{255, 128, 0}) // #ff8000
+```
+
+#### PrintableWithResult
+
+Like `Printable` but returns the number of bytes written and any error,
+which allows the printer to accurately track output size:
+
+```go
+type UserID int64
+
+func (id UserID) PrettyPrint(w io.Writer) (n int, err error) {
+    return fmt.Fprintf(w, "user-%d", id)
+}
+```
+
+```go
+pretty.Sprint(UserID(42)) // user-42
+```
+
+#### Stringer
+
+Return a string representation instead of writing to a writer:
+
+```go
+type Status int
+
+const (
+    StatusActive  Status = 1
+    StatusDeleted Status = 2
+)
+
+func (s Status) PrettyString() string {
+    switch s {
+    case StatusActive:
+        return "active"
+    case StatusDeleted:
+        return "deleted"
+    default:
+        return fmt.Sprintf("Status(%d)", s)
+    }
+}
+```
+
+```go
+pretty.Sprint(StatusActive) // `active`
 ```
 
 ### Nullable Types
@@ -150,8 +205,8 @@ printer := pretty.DefaultPrinter.WithPrintFuncFor(func(v reflect.Value) pretty.P
         stringer, ok = v.Addr().Interface().(fmt.Stringer)
     }
     if ok {
-        return func(w io.Writer) {
-            fmt.Fprint(w, stringer.String())
+        return func(w io.Writer) (int, error) {
+            return fmt.Fprint(w, stringer.String())
         }
     }
     return pretty.PrintFuncForPrintable(v) // Use default
@@ -168,8 +223,8 @@ printer.Println(CustomStringer{Name: "test"})
 printer := pretty.DefaultPrinter.WithPrintFuncFor(func(v reflect.Value) pretty.PrintFunc {
     // Customize based on type name
     if v.Kind() == reflect.String && v.String() == "a sensitive string" {
-        return func(w io.Writer) {
-            fmt.Fprint(w, "`***REDACTED***`")
+        return func(w io.Writer) (int, error) {
+            return fmt.Fprint(w, "`***REDACTED***`")
         }
     }
     return pretty.PrintFuncForPrintable(v) // Use default
@@ -211,8 +266,8 @@ func init() {
             if strings.Contains(str, "password") ||
                strings.Contains(str, "token") ||
                strings.Contains(str, "secret") {
-                return func(w io.Writer) {
-                    fmt.Fprint(w, "`***REDACTED***`")
+                return func(w io.Writer) (int, error) {
+                    return fmt.Fprint(w, "`***REDACTED***`")
                 }
             }
         }

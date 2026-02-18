@@ -3,30 +3,58 @@ package pretty
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 )
 
-// PrintAsJSON marshalles input as indented JSON
-// and calles fmt.Println with the result.
-// If indent arguments are given, they are joined into
-// a string and used as JSON line indent.
-// If no indet argument is given, two spaces will be used
-// to indent JSON lines.
-// A byte slice as input will be marshalled as json.RawMessage.
-func PrintAsJSON(input any, indent ...string) {
+func asJSON(input any, indent ...string) (data []byte, err error) {
 	var indentStr string
 	if len(indent) == 0 {
 		indentStr = "  "
 	} else {
 		indentStr = strings.Join(indent, "")
 	}
-	if b, ok := input.([]byte); ok {
-		input = json.RawMessage(b)
-	}
-	data, err := json.MarshalIndent(input, "", indentStr)
+	return json.MarshalIndent(input, "", indentStr)
+}
+
+// PrintAsJSON marshals input as indented JSON
+// and prints the result via fmt.Print.
+// If indent arguments are given, they are joined into
+// a string and used as JSON line indent.
+// If no indent argument is given, two spaces will be used
+// to indent JSON lines.
+func PrintAsJSON(input any, indent ...string) (n int, err error) {
+	data, err := asJSON(input, indent...)
 	if err != nil {
-		_, _ = fmt.Println(fmt.Errorf("%w from input: %#v", err, input))
-		return
+		return 0, err
 	}
-	_, _ = fmt.Println(string(data))
+	return fmt.Print(string(data))
+}
+
+// PrintlnAsJSON marshals input as indented JSON
+// and prints the result via fmt.Println.
+// If indent arguments are given, they are joined into
+// a string and used as JSON line indent.
+// If no indent argument is given, two spaces will be used
+// to indent JSON lines.
+func PrintlnAsJSON(input any, indent ...string) (n int, err error) {
+	data, err := asJSON(input, indent...)
+	if err != nil {
+		return 0, err
+	}
+	return fmt.Println(string(data))
+}
+
+// FprintAsJSON marshals input as indented JSON
+// and writes the result to w.
+// If indent arguments are given, they are joined into
+// a string and used as JSON line indent.
+// If no indent argument is given, two spaces will be used
+// to indent JSON lines.
+func FprintAsJSON(w io.Writer, input any, indent ...string) (n int, err error) {
+	data, err := asJSON(input, indent...)
+	if err != nil {
+		return 0, err
+	}
+	return w.Write(data)
 }

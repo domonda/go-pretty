@@ -3,6 +3,7 @@ package pretty
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"go/token"
 	"io"
@@ -54,8 +55,8 @@ type Printer struct {
 	//	        stringer, ok = v.Addr().Interface().(fmt.Stringer)
 	//	    }
 	//	    if ok {
-	//	        return func(w io.Writer) {
-	//	            fmt.Fprint(w, stringer.String())
+	//	        return func(w io.Writer) (int, error) {
+	//	            return fmt.Fprint(w, stringer.String())
 	//	        }
 	//	    }
 	//	    return pretty.PrintFuncForPrintable(v) // Use default
@@ -79,11 +80,8 @@ func (p *Printer) WithPrintFuncFor(printFuncFor func(reflect.Value) PrintFunc) *
 //   - No arguments: prints on a single line without indentation
 //   - One argument: uses indent[0] as indent string for nested structures
 //   - Two+ arguments: uses indent[0] as indent string and indent[1:] concatenated as line prefix
-func (p *Printer) Println(value any, indent ...string) {
-	endsWithNewLine := p.fprintIndent(os.Stdout, value, indent)
-	if !endsWithNewLine {
-		os.Stdout.Write([]byte{'\n'}) //#nosec G104
-	}
+func (p *Printer) Println(value any, indent ...string) (n int, err error) {
+	return p.Fprintln(os.Stdout, value, indent...)
 }
 
 // Print pretty prints a value to os.Stdout.
@@ -91,8 +89,8 @@ func (p *Printer) Println(value any, indent ...string) {
 //   - No arguments: prints on a single line without indentation
 //   - One argument: uses indent[0] as indent string for nested structures
 //   - Two+ arguments: uses indent[0] as indent string and indent[1:] concatenated as line prefix
-func (p *Printer) Print(value any, indent ...string) {
-	p.fprintIndent(os.Stdout, value, indent)
+func (p *Printer) Print(value any, indent ...string) (n int, err error) {
+	return p.Fprint(os.Stdout, value, indent...)
 }
 
 // Fprint pretty prints a value to a io.Writer.
@@ -100,8 +98,9 @@ func (p *Printer) Print(value any, indent ...string) {
 //   - No arguments: prints on a single line without indentation
 //   - One argument: uses indent[0] as indent string for nested structures
 //   - Two+ arguments: uses indent[0] as indent string and indent[1:] concatenated as line prefix
-func (p *Printer) Fprint(w io.Writer, value any, indent ...string) {
-	p.fprintIndent(w, value, indent)
+func (p *Printer) Fprint(w io.Writer, value any, indent ...string) (n int, err error) {
+	_, n, err = p.fprintIndent(w, value, indent)
+	return n, err
 }
 
 // Fprintln pretty prints a value to a io.Writer followed by a newline.
@@ -109,11 +108,17 @@ func (p *Printer) Fprint(w io.Writer, value any, indent ...string) {
 //   - No arguments: prints on a single line without indentation
 //   - One argument: uses indent[0] as indent string for nested structures
 //   - Two+ arguments: uses indent[0] as indent string and indent[1:] concatenated as line prefix
-func (p *Printer) Fprintln(w io.Writer, value any, indent ...string) {
-	endsWithNewLine := p.fprintIndent(w, value, indent)
-	if !endsWithNewLine {
-		w.Write([]byte{'\n'}) //#nosec G104
+func (p *Printer) Fprintln(w io.Writer, value any, indent ...string) (n int, err error) {
+	endsWithNewLine, n, err := p.fprintIndent(w, value, indent)
+	if err != nil {
+		return n, err
 	}
+	if !endsWithNewLine {
+		var n2 int
+		n2, err = w.Write([]byte{'\n'})
+		n += n2
+	}
+	return n, err
 }
 
 // Sprint pretty prints a value to a string.
@@ -123,7 +128,10 @@ func (p *Printer) Fprintln(w io.Writer, value any, indent ...string) {
 //   - Two+ arguments: uses indent[0] as indent string and indent[1:] concatenated as line prefix
 func (p *Printer) Sprint(value any, indent ...string) string {
 	var b strings.Builder
-	p.fprintIndent(&b, value, indent)
+	_, _, err := p.fprintIndent(&b, value, indent)
+	if err != nil {
+		return fmt.Sprintf("error printing value: %v", err)
+	}
 	return b.String()
 }
 
@@ -147,39 +155,43 @@ func (v visitedPtrs) visit(ptr uintptr) (visited bool) {
 // For nil values with line prefix, prints the prefix before "nil".
 // For non-nil values with indentation, the output is formatted with newlines
 // and proper indentation for readability.
-func (p *Printer) fprintIndent(w io.Writer, value any, indent []string) (endsWithNewLine bool) {
+func (p *Printer) fprintIndent(w io.Writer, value any, indent []string) (endsWithNewLine bool, n int, err error) {
 	switch {
 	case value == nil:
 		if len(indent) > 1 {
-			fmt.Fprint(w, strings.Join(indent[1:], ""))
+			n, err = fmt.Fprint(w, strings.Join(indent[1:], ""))
+			if err != nil {
+				return false, n, err
+			}
 		}
-		fmt.Fprint(w, "nil")
-		return false
+		n2, err := fmt.Fprint(w, "nil")
+		return false, n + n2, err
 
 	case len(indent) == 0:
-		p.fprint(w, reflect.ValueOf(value), make(visitedPtrs))
-		return false
+		n, err = p.fprint(w, reflect.ValueOf(value), make(visitedPtrs))
+		return false, n, err
 
 	default:
 		var buf bytes.Buffer
-		p.fprint(&buf, reflect.ValueOf(value), make(visitedPtrs))
+		_, err = p.fprint(&buf, reflect.ValueOf(value), make(visitedPtrs))
+		if err != nil {
+			return false, 0, err
+		}
 		in := Indent(buf.Bytes(), indent[0], indent[1:]...)
-		w.Write(in) //#nosec G104
-		return len(in) > 0 && in[len(in)-1] == '\n'
+		n, err = w.Write(in)
+		return len(in) > 0 && in[len(in)-1] == '\n', n, err
 	}
 }
 
 // #nosec G104 -- We don't check for errors writing to w
-func (p *Printer) fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
+func (p *Printer) fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) (int, error) {
 	if v.Kind() == reflect.Pointer {
 		if v.IsNil() {
-			fmt.Fprint(w, "nil")
-			return
+			return fmt.Fprint(w, "nil")
 		}
 		ptr := v.Pointer()
 		if ptrs.visit(ptr) {
-			fmt.Fprint(w, CircularRef)
-			return
+			return fmt.Fprint(w, CircularRef)
 		}
 		defer delete(ptrs, ptr)
 	}
@@ -189,30 +201,21 @@ func (p *Printer) fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
 		printFuncFor = PrintFuncForPrintable
 	}
 	if printFunc := printFuncFor(v); printFunc != nil {
-		printFunc(w)
-		return
+		return printFunc(w)
 	}
 
-	nullable, _ := v.Interface().(Nullable)
-	if nullable == nil && v.CanAddr() {
-		nullable, _ = v.Addr().Interface().(Nullable)
-	}
-	if nullable != nil && nullable.IsNull() {
-		fmt.Fprint(w, "null")
-		return
+	nullable, ok := tryCastReflectValue[Nullable](v)
+	if ok && nullable.IsNull() {
+		return fmt.Fprint(w, "null")
 	}
 
-	ctx, _ := v.Interface().(context.Context)
-	if ctx == nil && v.CanAddr() {
-		ctx, _ = v.Addr().Interface().(context.Context)
-	}
-	if ctx != nil {
+	ctx, ok := tryCastReflectValue[context.Context](v)
+	if ok {
 		var inner string
 		if ctx.Err() != nil {
 			inner = "Err:" + Sprint(ctx.Err().Error())
 		}
-		fmt.Fprintf(w, "Context{%s}", inner)
-		return
+		return fmt.Fprintf(w, "Context{%s}", inner)
 	}
 
 	for (v.Kind() == reflect.Pointer || v.Kind() == reflect.Interface) && !v.IsNil() {
@@ -222,11 +225,10 @@ func (p *Printer) fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
 
 	switch t {
 	case typeOfTime:
-		fmt.Fprintf(w, "Time(`%s`)", v.Interface())
-		return
+		return fmt.Fprintf(w, "Time(`%s`)", v.Interface())
+
 	case typeOfDuration:
-		fmt.Fprintf(w, "Duration(`%s`)", v.Interface())
-		return
+		return fmt.Fprintf(w, "Duration(`%s`)", v.Interface())
 	}
 
 	switch t.Kind() {
@@ -235,56 +237,62 @@ func (p *Printer) fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
 		if !v.IsNil() {
 			panic("expected nil")
 		}
-		fmt.Fprint(w, "nil")
+		return fmt.Fprint(w, "nil")
 
 	case reflect.String:
-		err, _ := v.Interface().(error)
-		if err == nil && v.CanAddr() {
-			err, _ = v.Addr().Interface().(error)
+		err, ok := tryCastReflectValue[error](v)
+		if ok {
+			return fmt.Fprintf(w, "error(%s)", quoteString(err, p.MaxErrorLength))
 		}
-		if err != nil {
-			fmt.Fprintf(w, "error(%s)", quoteString(err, p.MaxErrorLength))
-			return
-		}
-		fmt.Fprint(w, quoteString(v.Interface(), p.MaxStringLength))
+		return fmt.Fprint(w, quoteString(v.Interface(), p.MaxStringLength))
 
 	case reflect.Bool:
-		fmt.Fprint(w, v.Interface())
+		return fmt.Fprint(w, v.Interface())
 
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		fmt.Fprint(w, v.Interface())
+		return fmt.Fprint(w, v.Interface())
 
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		fmt.Fprint(w, v.Interface())
+		return fmt.Fprint(w, v.Interface())
 
 	case reflect.Uintptr:
-		fmt.Fprintf(w, "%#v", v.Interface())
+		return fmt.Fprintf(w, "%#v", v.Interface())
 
 	case reflect.Float32, reflect.Float64:
-		fmt.Fprint(w, v.Interface())
+		return fmt.Fprint(w, v.Interface())
 
 	case reflect.Complex64, reflect.Complex128:
-		fmt.Fprint(w, v.Interface())
+		return fmt.Fprint(w, v.Interface())
 
 	case reflect.Array:
-		w.Write([]byte{'['})
-		for i := 0; i < v.Len(); i++ {
-			if i > 0 {
-				w.Write([]byte{','})
-			}
-			p.fprint(w, v.Index(i), ptrs)
+		n, err := w.Write([]byte{'['})
+		if err != nil {
+			return n, err
 		}
-		w.Write([]byte{']'})
+		for i := range v.Len() {
+			if i > 0 {
+				n2, err := w.Write([]byte{','})
+				n += n2
+				if err != nil {
+					return n, err
+				}
+			}
+			n2, err := p.fprint(w, v.Index(i), ptrs)
+			n += n2
+			if err != nil {
+				return n, err
+			}
+		}
+		n2, err := w.Write([]byte{']'})
+		return n + n2, err
 
 	case reflect.Slice:
 		if v.IsNil() {
-			fmt.Fprint(w, "nil")
-			return
+			return fmt.Fprint(w, "nil")
 		}
 		ptr := v.Pointer()
 		if ptrs.visit(ptr) {
-			fmt.Fprint(w, CircularRef)
-			return
+			return fmt.Fprint(w, CircularRef)
 		}
 		defer delete(ptrs, ptr)
 		switch t.Elem() {
@@ -292,12 +300,10 @@ func (p *Printer) fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
 			b := v.Bytes()
 			if bytes.IndexByte(b, 0) == -1 && utf8.Valid(b) {
 				// Bytes are valid UTF-8 without zero, assume it's a string
-				fmt.Fprint(w, quoteString(b, p.MaxStringLength))
-				return
+				return fmt.Fprint(w, quoteString(b, p.MaxStringLength))
 			}
 			if p.MaxSliceLength > 0 && len(b) > p.MaxSliceLength {
-				fmt.Fprintf(w, "[]byte{len(%d)}", len(b))
-				return
+				return fmt.Fprintf(w, "[]byte{len(%d)}", len(b))
 			}
 		case typeOfRune:
 			runes := v.Interface().([]rune)
@@ -309,69 +315,101 @@ func (p *Printer) fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
 				}
 			}
 			if valid {
-				fmt.Fprint(w, quoteString(string(runes), p.MaxStringLength))
-				return
+				return fmt.Fprint(w, quoteString(string(runes), p.MaxStringLength))
 			}
 		}
-		w.Write([]byte{'['})
-		for i := 0; i < v.Len(); i++ {
+		n, err := w.Write([]byte{'['})
+		if err != nil {
+			return n, err
+		}
+		for i := range v.Len() {
 			if i > 0 {
-				w.Write([]byte{','})
+				n2, err := w.Write([]byte{','})
+				n += n2
+				if err != nil {
+					return n, err
+				}
 			}
 			if p.MaxSliceLength > 0 && i >= p.MaxSliceLength {
-				fmt.Fprint(w, "…")
+				n2, err := fmt.Fprint(w, "…")
+				n += n2
+				if err != nil {
+					return n, err
+				}
 				break
 			}
-			p.fprint(w, v.Index(i), ptrs)
+			n2, err := p.fprint(w, v.Index(i), ptrs)
+			n += n2
+			if err != nil {
+				return n, err
+			}
 		}
-		w.Write([]byte{']'})
+		n2, err := w.Write([]byte{']'})
+		return n + n2, err
 
 	case reflect.Map:
 		if v.IsNil() {
-			fmt.Fprint(w, "nil")
-			return
+			return fmt.Fprint(w, "nil")
 		}
 		ptr := v.Pointer()
 		if ptrs.visit(ptr) {
-			fmt.Fprint(w, CircularRef)
-			return
+			return fmt.Fprint(w, CircularRef)
 		}
 		defer delete(ptrs, ptr)
-		fmt.Fprintf(w, "%s{", t.Name())
+		n, err := fmt.Fprintf(w, "%s{", t.Name())
+		if err != nil {
+			return n, err
+		}
 		mapKeys := v.MapKeys()
 		p.sortReflectValues(mapKeys, t.Key(), ptrs)
 		for i, key := range mapKeys {
 			if i > 0 {
-				w.Write([]byte{';'})
+				n2, err := w.Write([]byte{';'})
+				n += n2
+				if err != nil {
+					return n, err
+				}
 			}
-			p.fprint(w, key, ptrs)
-			w.Write([]byte{':'})
-			p.fprint(w, v.MapIndex(key), ptrs)
+			n2, err := p.fprint(w, key, ptrs)
+			n += n2
+			if err != nil {
+				return n, err
+			}
+			n2, err = w.Write([]byte{':'})
+			n += n2
+			if err != nil {
+				return n, err
+			}
+			n2, err = p.fprint(w, v.MapIndex(key), ptrs)
+			n += n2
+			if err != nil {
+				return n, err
+			}
 		}
-		w.Write([]byte{'}'})
+		n2, err := w.Write([]byte{'}'})
+		return n + n2, err
 
 	case reflect.Struct:
 		hasExportedFields := false
-		for i := 0; i < t.NumField(); i++ {
+		for i := range t.NumField() {
 			if token.IsExported(t.Field(i).Name) {
 				hasExportedFields = true
 				break
 			}
 		}
 		if !hasExportedFields {
-			err, _ := v.Interface().(error)
-			if err == nil && v.CanAddr() {
-				err, _ = v.Addr().Interface().(error)
-			}
-			if err != nil {
-				fmt.Fprintf(w, "error(%s)", quoteString(err, p.MaxErrorLength))
-				return
+			err, ok := tryCastReflectValue[error](v)
+			if ok {
+				return fmt.Fprintf(w, "error(%s)", quoteString(err, p.MaxErrorLength))
 			}
 		}
 
-		fmt.Fprintf(w, "%s{", t.Name())
+		n, err := fmt.Fprintf(w, "%s{", t.Name())
+		if err != nil {
+			return n, err
+		}
 		first := true
-		for i := 0; i < t.NumField(); i++ {
+		for i := range t.NumField() {
 			f := t.Field(i)
 			if !token.IsExported(f.Name) {
 				continue
@@ -379,31 +417,42 @@ func (p *Printer) fprint(w io.Writer, v reflect.Value, ptrs visitedPtrs) {
 			if first {
 				first = false
 			} else {
-				w.Write([]byte{';'})
+				n2, err := w.Write([]byte{';'})
+				n += n2
+				if err != nil {
+					return n, err
+				}
 			}
 			if !f.Anonymous {
-				fmt.Fprintf(w, "%s:", f.Name)
+				n2, err := fmt.Fprintf(w, "%s:", f.Name)
+				n += n2
+				if err != nil {
+					return n, err
+				}
 			}
-			p.fprint(w, v.Field(i), ptrs)
+			n2, err := p.fprint(w, v.Field(i), ptrs)
+			n += n2
+			if err != nil {
+				return n, err
+			}
 		}
-		w.Write([]byte{'}'})
+		n2, err := w.Write([]byte{'}'})
+		return n + n2, err
 
 	case reflect.Chan, reflect.Func:
 		if v.IsNil() {
-			fmt.Fprint(w, "nil")
-			return
+			return fmt.Fprint(w, "nil")
 		}
-		fmt.Fprint(w, t.String())
+		return fmt.Fprint(w, t.String())
 
 	case reflect.UnsafePointer:
 		if v.IsNil() {
-			fmt.Fprint(w, "nil")
-			return
+			return fmt.Fprint(w, "nil")
 		}
-		fmt.Fprint(w, v.Interface())
+		return fmt.Fprint(w, v.Interface())
 
 	default:
-		panic("invalid kind: " + t.Kind().String())
+		return 0, fmt.Errorf("unexpected reflect.Kind: %s", t.Kind())
 	}
 }
 
@@ -438,7 +487,7 @@ func (p *Printer) sortReflectValues(vals []reflect.Value, valType reflect.Type, 
 		return
 	case reflect.Bool:
 		sort.Slice(vals, func(i, j int) bool {
-			return vals[i].Bool() == false && vals[j].Bool() == true
+			return !vals[i].Bool() && vals[j].Bool()
 		})
 		return
 	case reflect.Slice:
@@ -474,4 +523,26 @@ func quoteString(s any, maxLen int) string {
 		q = "`" + q[1:len(q)-1] + "`"
 	}
 	return q
+}
+
+type countingWriter struct {
+	writer io.Writer
+
+	n   int
+	err error
+}
+
+func newCountingWriter(writer io.Writer) *countingWriter {
+	return &countingWriter{writer: writer}
+}
+
+func (w *countingWriter) Write(p []byte) (n int, err error) {
+	n, err = w.writer.Write(p)
+	w.n += n
+	w.err = errors.Join(w.err, err)
+	return n, err
+}
+
+func (w *countingWriter) Result() (n int, err error) {
+	return w.n, w.err
 }

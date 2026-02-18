@@ -14,7 +14,7 @@ var (
 	}
 
 	// CircularRef is a replacement token (default "CIRCULAR_REF")
-	// that will be printed instad of a circular data reference.
+	// that will be printed instead of a circular data reference.
 	CircularRef = "CIRCULAR_REF"
 )
 

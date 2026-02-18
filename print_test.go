@@ -1,9 +1,12 @@
 package pretty
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 	"unsafe"
@@ -104,6 +107,10 @@ func TestSprint(t *testing.T) {
 			}
 		})
 	}
+
+	// Save and restore DefaultPrinter after modifying it
+	savedPrinter := DefaultPrinter
+	t.Cleanup(func() { DefaultPrinter = savedPrinter })
 
 	DefaultPrinter.MaxStringLength = 5
 	t.Run(fmt.Sprintf("MaxStringLength_%d", DefaultPrinter.MaxStringLength), func(t *testing.T) {
@@ -239,6 +246,146 @@ func TestSpecialTypes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := Sprint(tt.value); got != tt.want {
 				t.Errorf("Sprint() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFprint(t *testing.T) {
+	var b strings.Builder
+	n, err := Fprint(&b, "hello")
+	if err != nil {
+		t.Fatalf("Fprint returned error: %v", err)
+	}
+	want := "`hello`"
+	if got := b.String(); got != want {
+		t.Errorf("Fprint wrote %q, want %q", got, want)
+	}
+	if n != len(want) {
+		t.Errorf("Fprint returned n=%d, want %d", n, len(want))
+	}
+}
+
+func TestFprintln(t *testing.T) {
+	var b strings.Builder
+	n, err := Fprintln(&b, 42)
+	if err != nil {
+		t.Fatalf("Fprintln returned error: %v", err)
+	}
+	want := "42\n"
+	if got := b.String(); got != want {
+		t.Errorf("Fprintln wrote %q, want %q", got, want)
+	}
+	if n != len(want) {
+		t.Errorf("Fprintln returned n=%d, want %d", n, len(want))
+	}
+}
+
+func TestFprintNil(t *testing.T) {
+	var b strings.Builder
+	n, err := Fprint(&b, nil)
+	if err != nil {
+		t.Fatalf("Fprint returned error: %v", err)
+	}
+	want := "nil"
+	if got := b.String(); got != want {
+		t.Errorf("Fprint wrote %q, want %q", got, want)
+	}
+	if n != len(want) {
+		t.Errorf("Fprint returned n=%d, want %d", n, len(want))
+	}
+}
+
+type nullableValue struct {
+	isNull bool
+}
+
+func (n nullableValue) IsNull() bool { return n.isNull }
+
+func TestNullable(t *testing.T) {
+	t.Run("null value", func(t *testing.T) {
+		got := Sprint(nullableValue{isNull: true})
+		if got != "null" {
+			t.Errorf("Sprint(null) = %q, want %q", got, "null")
+		}
+	})
+	t.Run("non-null value", func(t *testing.T) {
+		got := Sprint(nullableValue{isNull: false})
+		want := "nullableValue{}"
+		if got != want {
+			t.Errorf("Sprint(non-null) = %q, want %q", got, want)
+		}
+	})
+}
+
+func TestContext(t *testing.T) {
+	t.Run("background context", func(t *testing.T) {
+		got := Sprint(context.Background())
+		if got != "Context{}" {
+			t.Errorf("Sprint(context.Background()) = %q, want %q", got, "Context{}")
+		}
+	})
+	t.Run("cancelled context", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		got := Sprint(ctx)
+		want := "Context{Err:`context canceled`}"
+		if got != want {
+			t.Errorf("Sprint(cancelled context) = %q, want %q", got, want)
+		}
+	})
+}
+
+func TestWithPrintFuncFor(t *testing.T) {
+	printer := DefaultPrinter.WithPrintFuncFor(func(v reflect.Value) PrintFunc {
+		if v.Kind() == reflect.String {
+			return func(w io.Writer) (int, error) {
+				return fmt.Fprintf(w, "CUSTOM(%s)", v.String())
+			}
+		}
+		return PrintFuncForPrintable(v)
+	})
+
+	t.Run("custom func used", func(t *testing.T) {
+		got := printer.Sprint("test")
+		want := "CUSTOM(test)"
+		if got != want {
+			t.Errorf("Sprint() = %q, want %q", got, want)
+		}
+	})
+	t.Run("default for non-string", func(t *testing.T) {
+		got := printer.Sprint(42)
+		if got != "42" {
+			t.Errorf("Sprint() = %q, want %q", got, "42")
+		}
+	})
+	t.Run("preserves MaxStringLength", func(t *testing.T) {
+		if printer.MaxStringLength != DefaultPrinter.MaxStringLength {
+			t.Errorf("MaxStringLength = %d, want %d", printer.MaxStringLength, DefaultPrinter.MaxStringLength)
+		}
+	})
+}
+
+func TestQuoteString(t *testing.T) {
+	tests := []struct {
+		name   string
+		s      any
+		maxLen int
+		want   string
+	}{
+		{name: "simple", s: "hello", maxLen: 0, want: "`hello`"},
+		{name: "empty", s: "", maxLen: 0, want: "``"},
+		{name: "newline", s: "a\nb", maxLen: 0, want: "`a\\nb`"},
+		{name: "backtick", s: "a`b", maxLen: 0, want: "`a`b`"},
+		{name: "truncate", s: "Hello World", maxLen: 5, want: "`Hello…`"},
+		{name: "no truncate at limit", s: "Hello", maxLen: 5, want: "`Hello`"},
+		{name: "maxLen disabled", s: "Hello World", maxLen: -1, want: "`Hello World`"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := quoteString(tt.s, tt.maxLen)
+			if got != tt.want {
+				t.Errorf("quoteString(%q, %d) = %q, want %q", tt.s, tt.maxLen, got, tt.want)
 			}
 		})
 	}

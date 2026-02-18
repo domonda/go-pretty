@@ -23,8 +23,8 @@ import (
 //   - No arguments: prints on a single line without indentation
 //   - One argument: uses indent[0] as indent string for nested structures
 //   - Two+ arguments: uses indent[0] as indent string and indent[1:] concatenated as line prefix
-func Println(value any, indent ...string) {
-	DefaultPrinter.Println(value, indent...)
+func Println(value any, indent ...string) (n int, err error) {
+	return DefaultPrinter.Println(value, indent...)
 }
 
 // Print pretty prints a value to os.Stdout.
@@ -32,8 +32,8 @@ func Println(value any, indent ...string) {
 //   - No arguments: prints on a single line without indentation
 //   - One argument: uses indent[0] as indent string for nested structures
 //   - Two+ arguments: uses indent[0] as indent string and indent[1:] concatenated as line prefix
-func Print(value any, indent ...string) {
-	DefaultPrinter.Print(value, indent...)
+func Print(value any, indent ...string) (n int, err error) {
+	return DefaultPrinter.Print(value, indent...)
 }
 
 // Fprint pretty prints a value to a io.Writer.
@@ -41,8 +41,8 @@ func Print(value any, indent ...string) {
 //   - No arguments: prints on a single line without indentation
 //   - One argument: uses indent[0] as indent string for nested structures
 //   - Two+ arguments: uses indent[0] as indent string and indent[1:] concatenated as line prefix
-func Fprint(w io.Writer, value any, indent ...string) {
-	DefaultPrinter.Fprint(w, value, indent...)
+func Fprint(w io.Writer, value any, indent ...string) (n int, err error) {
+	return DefaultPrinter.Fprint(w, value, indent...)
 }
 
 // Fprintln pretty prints a value to a io.Writer followed by a newline.
@@ -50,8 +50,8 @@ func Fprint(w io.Writer, value any, indent ...string) {
 //   - No arguments: prints on a single line without indentation
 //   - One argument: uses indent[0] as indent string for nested structures
 //   - Two+ arguments: uses indent[0] as indent string and indent[1:] concatenated as line prefix
-func Fprintln(w io.Writer, value any, indent ...string) {
-	DefaultPrinter.Fprintln(w, value, indent...)
+func Fprintln(w io.Writer, value any, indent ...string) (n int, err error) {
+	return DefaultPrinter.Fprintln(w, value, indent...)
 }
 
 // Sprint pretty prints a value to a string.
