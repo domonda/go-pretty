@@ -1,5 +1,9 @@
 # go-pretty
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/domonda/go-pretty.svg)](https://pkg.go.dev/github.com/domonda/go-pretty)
+[![Go Report Card](https://goreportcard.com/badge/github.com/domonda/go-pretty)](https://goreportcard.com/report/github.com/domonda/go-pretty)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Pretty printing for complex Go types
 
 ## Overview

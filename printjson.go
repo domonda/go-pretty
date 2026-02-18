@@ -45,6 +45,20 @@ func PrintlnAsJSON(input any, indent ...string) (n int, err error) {
 	return fmt.Println(string(data))
 }
 
+// SprintAsJSON marshals input as indented JSON
+// and returns the result as a string.
+// If indent arguments are given, they are joined into
+// a string and used as JSON line indent.
+// If no indent argument is given, two spaces will be used
+// to indent JSON lines.
+func SprintAsJSON(input any, indent ...string) (string, error) {
+	data, err := asJSON(input, indent...)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
 // FprintAsJSON marshals input as indented JSON
 // and writes the result to w.
 // If indent arguments are given, they are joined into
