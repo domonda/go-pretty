@@ -500,8 +500,8 @@ func (p *Printer) sortReflectValues(vals []reflect.Value, valType reflect.Type, 
 	}
 	sort.Slice(vals, func(i, j int) bool {
 		var ip, jp strings.Builder
-		_, _ = p.fprint(&ip, vals[i], ptrs) // #nosec G104 -- strings.Builder.Write never errors
-		_, _ = p.fprint(&jp, vals[j], ptrs) // #nosec G104 -- strings.Builder.Write never errors
+		_, _ = p.fprint(&ip, vals[i], ptrs) //#nosec G104 -- strings.Builder.Write never errors
+		_, _ = p.fprint(&jp, vals[j], ptrs) //#nosec G104 -- strings.Builder.Write never errors
 		return ip.String() < jp.String()
 	})
 }
